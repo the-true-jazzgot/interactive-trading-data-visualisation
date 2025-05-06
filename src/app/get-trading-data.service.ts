@@ -7,10 +7,9 @@ import * as mockTradingData from './mockData.json'
   providedIn: 'root'
 })
 export class TradingDataService {
-  // constructor(private http: HttpClient) { }
-
+  // constructor(private http: HttpClient) { 
   // getData(): Observable<any> {
-  //   return this.http.get('https://big-xyt.com/assets/files/sample.json');
+  //   return this.http.get('https://big-xyt.com/assets/files/sample.json'); //CORS error
   // }
 
   data = mockTradingData;

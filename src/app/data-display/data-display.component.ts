@@ -42,7 +42,6 @@ export class DataDisplayComponent implements OnInit {
   dataPointsOnAxis!: any;
   startTimeLabel!: any;
   endTimeLabel!: any;
-  dragElem!:any;
   
   constructor(private getTradingData: TradingDataService) {}
 
@@ -97,10 +96,26 @@ export class DataDisplayComponent implements OnInit {
       .classed('slider-label', true)
       .text(this.times[this.times.length - 1].toDateString());
 
+    this.createDragElem();
+  }
+
+  createDragElem(){
     const drag = d3.drag<SVGCircleElement, any>()
-      .on('drag', this.dragElement)
-      .on('end', this.dragEnd);
-    this.dragElem = this.timeSlider.append('circle')
+      .on('drag', (event: any) => {
+        dragElem.attr( "cx",() => {
+          if(event.x < this.timeAxis.attr('x1')) return this.timeAxis.attr('x1');
+          if(event.x > this.timeAxis.attr('x2')) return this.timeAxis.attr('x2');
+          return event.x
+        });
+      })
+      .on('end', (event:any) => {
+        const xToDate = this.timeScale.invert(event.x);
+        const xData = this.chartData[d3.bisectCenter(this.times, xToDate)];
+        dragElem.attr( "cx", this.timeScale(xData.Time));
+        console.log(xData);
+      });
+
+    const dragElem = this.timeSlider.append('circle')
       .attr('r', "6px")
       .attr('cy', `${this.marginTop + 2}px`)
       .attr('cx', this.timeScale(this.times[0]))
@@ -108,24 +123,8 @@ export class DataDisplayComponent implements OnInit {
       .attr('stroke-width', '4px')
       .attr('fill', '#00000000')
       .classed('selector', true)
-      .call(drag)
+      .call(drag);
   }
-
-  dragElement(event: any){
-    this.dragElem.attr( "cx",() => {
-      if(event.x < this.timeAxis.attr('x1')) return this.timeAxis.attr('x1');
-      if(event.x > this.timeAxis.attr('x2')) return this.timeAxis.attr('x2');
-      return event.x
-    });
-  }
-
-  dragEnd(event:any){
-    const xToDate = this.timeScale.invert(event.x);
-    const xData = this.chartData[d3.bisectCenter(this.times, xToDate)];
-    this.dragElem.attr( "cx", this.timeScale(xData.Time));
-    console.log(xData);
-  }
-
   
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{
     const formated = {
