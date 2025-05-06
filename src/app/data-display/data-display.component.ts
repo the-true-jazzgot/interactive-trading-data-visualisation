@@ -31,9 +31,24 @@ export class DataDisplayComponent implements OnInit {
   height = 30;
   marginTop = 10;
 
+  //chart data
+  times!: Date[];
+  minTime!: Date;
+  maxTime!: Date;
+  timeScale!: any; //TODO
+  timeSlider!: any;
+
+  timeAxis!: any;
+  dataPointsOnAxis!: any;
+  startTimeLabel!: any;
+  endTimeLabel!: any;
+  dragElem!:any;
+  
   constructor(private getTradingData: TradingDataService) {}
 
   ngOnInit(): void {
+    this.timeSlider = d3.select('.dateSlider');
+    console.log(this.timeSlider);
     this.getTradingData.getData().subscribe({
       next: data => {
         this.data = data.default;
@@ -47,9 +62,71 @@ export class DataDisplayComponent implements OnInit {
 
     this.dataPoint = this.chartData[0];
 
-    this.chart();
+    this.times = this.chartData.map(dataPoint => dataPoint.Time);
+    [this.minTime, this.maxTime] = d3.extent(this.times) as [Date, Date];
+    this.timeScale = d3.scaleTime()
+      .domain([this.minTime, this.maxTime])
+      .range([this.marginLeft, this.width - this.marginRight]);
+
+    this.timeAxis = this.timeSlider.append('line')
+      .attr('x1', this.marginLeft)
+      .attr('y1', `${this.marginTop + 2}px`)
+      .attr('x2', this.width - this.marginRight)
+      .attr('y2', `${this.marginTop + 2}px`)
+      .attr('stroke', 'black')
+      .attr('stroke-width', "2px");
+
+    this.dataPointsOnAxis = this.timeSlider.selectAll('circle')
+      .data(this.chartData)
+      .join('circle')
+      .attr('r', "3px")
+      .attr('cy', `${this.marginTop + 2}px`)
+      .attr('cx', (timePoint: DataInTimePoint) => this.timeScale(timePoint.Time));
+
+    this.startTimeLabel = this.timeSlider.append('text')
+      .attr('x', this.marginLeft)
+      .attr('y', `${this.marginTop + 15}px`)
+      .attr('text-anchor', 'middle')
+      .classed('slider-label', true)
+      .text(this.times[0].toDateString());
+
+    this.endTimeLabel = this.timeSlider.append('text')
+      .attr('x', this.width - this.marginRight)
+      .attr('y', `${this.marginTop + 15}px`)
+      .attr('text-anchor', 'middle')
+      .classed('slider-label', true)
+      .text(this.times[this.times.length - 1].toDateString());
+
+    const drag = d3.drag<SVGCircleElement, any>()
+      .on('drag', this.dragElement)
+      .on('end', this.dragEnd);
+    this.dragElem = this.timeSlider.append('circle')
+      .attr('r', "6px")
+      .attr('cy', `${this.marginTop + 2}px`)
+      .attr('cx', this.timeScale(this.times[0]))
+      .attr('stroke', 'green')
+      .attr('stroke-width', '4px')
+      .attr('fill', '#00000000')
+      .classed('selector', true)
+      .call(drag)
   }
 
+  dragElement(event: any){
+    this.dragElem.attr( "cx",() => {
+      if(event.x < this.timeAxis.attr('x1')) return this.timeAxis.attr('x1');
+      if(event.x > this.timeAxis.attr('x2')) return this.timeAxis.attr('x2');
+      return event.x
+    });
+  }
+
+  dragEnd(event:any){
+    const xToDate = this.timeScale.invert(event.x);
+    const xData = this.chartData[d3.bisectCenter(this.times, xToDate)];
+    this.dragElem.attr( "cx", this.timeScale(xData.Time));
+    console.log(xData);
+  }
+
+  
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{
     const formated = {
       Time: new Date(this.date),
@@ -57,30 +134,28 @@ export class DataDisplayComponent implements OnInit {
     } as DataInTimePoint;
     const keys = Object.keys(dataInTimePoint);
     const numberOfAsks = (keys.length - 1)/4; //assumes there are always same number of bids and asks in object
-
+  
     keys.forEach(key => {
       let number = key.match(/\d+/g);
-
+  
       if(number) {
         let n = Number.parseInt(number[0]) - 1;
-
-        //Ask price
+  
+        //Ask
         if(key[0] === "A" && key[key.length-1] !== "e"){
           formated.values[n] = {
             ...formated.values[n],
             price:dataInTimePoint[key],
           };
         }
-
-        //Ask size
         if(key[0] === "A" && key[key.length-1] === "e"){
           formated.values[n] = {
             ...formated.values[n],
             size:dataInTimePoint[key],
           };
         }
-
-        //Bid price
+  
+        //Bid
         if(key[0] === "B" && key[key.length-1] !== "e"){
           n = n + numberOfAsks;
           formated.values[n] = {
@@ -88,8 +163,6 @@ export class DataDisplayComponent implements OnInit {
             price:dataInTimePoint[key],
           };
         }
-
-        //Bid size
         if(key[0] === "B" && key[key.length-1] === "e"){
           n = n + numberOfAsks;
           formated.values[n] = {
@@ -107,70 +180,4 @@ export class DataDisplayComponent implements OnInit {
     });
     return formated;
   }
-
-  chart() {
-    const times: Date[] = this.chartData.map(dataPoint => dataPoint.Time);
-    const [minTime, maxTime] = d3.extent(times) as [Date, Date];
-    const timeScale = d3.scaleTime()
-      .domain([minTime, maxTime])
-      .range([this.marginLeft, this.width - this.marginRight]);
-
-    const timeSlider = d3.select('.dateSlider');
-    const timeAxis = timeSlider.append('line')
-      .attr('x1', this.marginLeft)
-      .attr('y1', `${this.marginTop + 2}px`)
-      .attr('x2', this.width - this.marginRight)
-      .attr('y2', `${this.marginTop + 2}px`)
-      .attr('stroke', 'black')
-      .attr('stroke-width', "2px");
-    timeSlider.selectAll('circle')
-      .data(this.chartData)
-      .join('circle')
-      .attr('r', "3px")
-      .attr('cy', `${this.marginTop + 2}px`)
-      .attr('cx', timePoint => timeScale(timePoint.Time));
-    timeSlider.append('text')
-      .attr('x', this.marginLeft)
-      .attr('y', `${this.marginTop + 15}px`)
-      .attr('text-anchor', 'middle')
-      .classed('slider-label', true)
-      .text(times[0].toDateString());
-    timeSlider.append('text')
-      .attr('x', this.width - this.marginRight)
-      .attr('y', `${this.marginTop + 15}px`)
-      .attr('text-anchor', 'middle')
-      .classed('slider-label', true)
-      .text(times[times.length - 1].toDateString());
-    const drag = d3.drag<SVGCircleElement, any>()
-      .on('drag', dragElement)
-      .on('end', dragEnd);
-    const dragElem = timeSlider.append('circle')
-      .attr('r', "6px")
-      .attr('cy', `${this.marginTop + 2}px`)
-      .attr('cx', timeScale(times[0]))
-      .attr('stroke', 'green')
-      .attr('stroke-width', '4px')
-      .attr('fill', '#00000000')
-      .classed('selector', true)
-      .call(drag)
-
-    function dragElement(event: any){
-      dragElem.attr( "cx",() => {
-        if(event.x < timeAxis.attr('x1')) return timeAxis.attr('x1');
-        if(event.x > timeAxis.attr('x2')) return timeAxis.attr('x2');
-        return event.x
-      });
-    }
-
-    const chartData = this.chartData;
-
-    function dragEnd(event:any){
-      const xToDate = timeScale.invert(event.x);
-      const xData = chartData[d3.bisectCenter(times, xToDate)];
-      dragElem.attr( "cx", timeScale(xData.Time));
-      console.log(xData);
-    }
-  }
-
-  
 }
