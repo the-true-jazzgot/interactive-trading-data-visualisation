@@ -11,8 +11,8 @@ import { DataInTimePoint, PriceValue } from '../trading.interfaces'
 export class ChartComponent implements OnChanges {
   @Input({required: true}) width!: number;
   @Input({required: true}) height!: number;
-  @Input() marginLeft: number = 40;
-  @Input() marginRight: number = 40;
+  @Input() marginLeft: number = 150;
+  @Input() marginRight: number = 150;
   @Input() marginTop: number = 40;
   @Input() marginBottom: number = 40;
   @Input({required:true}) data!: DataInTimePoint;
@@ -52,20 +52,35 @@ export class ChartComponent implements OnChanges {
         .call(d3.axisLeft(prizeScale));
 
       const zeroX = sizeScale(0);
-      const barHeight = prizeScale(minPrice)
+      const barHeight = prizeScale(minPrice) - prizeScale(minPrice + .00025);
       this.values.forEach(value => {
         if(value.type === 'bid') {
           this.chart.append('rect')
             .attr('x', sizeScale(value.size))
-            .attr('y', prizeScale(value.price))
+            .attr('y', prizeScale(value.price) - barHeight/2)
             .attr('width', zeroX - sizeScale(value.size))
-            .attr('height', '3px');
+            .attr('height', barHeight)
+            .attr('fill', 'green');
+          let b = this.chart.append('text')
+            .attr('x', sizeScale(value.size) - 5)
+            .attr('y', prizeScale(value.price) + barHeight/2)
+            .attr('text-anchor', 'left')
+            .classed('bar-label', true)
+            .text(value.price);
+          b.attr('x', sizeScale(value.size) - (b.node()?.getBBox().width ?? 0));
         } else {
           this.chart.append('rect')
             .attr('x', zeroX)
-            .attr('y', prizeScale(value.price))
+            .attr('y', prizeScale(value.price) - barHeight/2)
             .attr('width', sizeScale(value.size) - zeroX)
-            .attr('height', '3px');
+            .attr('height', barHeight)
+            .attr('fill', 'red');
+          let b = this.chart.append('text')
+            .attr('x', sizeScale(value.size) + 3)
+            .attr('y', prizeScale(value.price) + barHeight/2)
+            .attr('text-anchor', 'left')
+            .classed('bar-label', true)
+            .text(value.price);
         }
       })
     }
