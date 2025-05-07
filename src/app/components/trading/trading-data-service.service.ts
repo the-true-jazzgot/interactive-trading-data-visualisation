@@ -1,15 +1,15 @@
 import { Injectable } from '@angular/core';
-import { Subject } from 'rxjs';
-import { DataInTimePoint } from '../trading/trading.interfaces';
+import { ReplaySubject } from 'rxjs';
+import { DataInTimePoint } from './trading.interfaces';
 
 @Injectable({
   providedIn: 'root'
 })
 export class TradingDataService {
-  private dataInTimePoint = new Subject<DataInTimePoint>();
+  private dataInTimePoint = new ReplaySubject<DataInTimePoint>(1);
   dataInTimePoint$ = this.dataInTimePoint.asObservable();
 
-  changeDataPoint(dataPoint: DataInTimePoint){
+  setDataPoint(dataPoint: DataInTimePoint){
     this.dataInTimePoint.next(dataPoint);
   }
 }

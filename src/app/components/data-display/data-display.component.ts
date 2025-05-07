@@ -1,9 +1,9 @@
 import { Component, OnInit, ViewEncapsulation } from '@angular/core';
 import { GetTradingDataService } from '../../services/get-trading-data.service';
-import { ChartComponent } from "../chart/chart.component";
-import { SliderComponent } from "../slider/slider.component";
-import { DataInTimePoint } from '../trading.interfaces'
-import { TradingDataService } from '../../services/trading-data-service.service';
+import { ChartComponent } from "../trading/chart/chart.component";
+import { SliderComponent } from "../trading/slider/slider.component";
+import { DataInTimePoint } from '../trading/trading.interfaces'
+import { TradingDataService } from '../trading/trading-data-service.service';
 
 @Component({
   selector: 'app-data-display',
@@ -17,7 +17,6 @@ export class DataDisplayComponent implements OnInit {
   chartData!: DataInTimePoint[];
   error?: Error;
   date: Date =  new Date(); //assumes todays data
-  dataPoint!: DataInTimePoint;
 
   constructor(private getTradingData: GetTradingDataService, private tradingDataService: TradingDataService) {}
 
@@ -32,15 +31,6 @@ export class DataDisplayComponent implements OnInit {
     this.chartData = this.data
       .map(elem => this.formatDataPoint(elem))
       .sort((a,b) => a.Time.getTime() - b.Time.getTime());
-
-    this.dataPoint = this.chartData[0];
-
-    this.tradingDataService.dataInTimePoint$.subscribe({
-      next: data => {
-        this.dataPoint = data;
-      },
-      error: e => this.error = e,
-    });
   }
 
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{

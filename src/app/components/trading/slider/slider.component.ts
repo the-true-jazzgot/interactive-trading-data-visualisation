@@ -1,7 +1,7 @@
-import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 import { DataInTimePoint } from '../trading.interfaces';
 import * as d3 from 'd3';
-import { TradingDataService } from '../../services/trading-data-service.service';
+import { TradingDataService } from '../trading-data-service.service';
 
 @Component({
   selector: 'app-slider',
@@ -9,7 +9,7 @@ import { TradingDataService } from '../../services/trading-data-service.service'
   templateUrl: './slider.component.html',
   styleUrl: './slider.component.scss'
 })
-export class SliderComponent implements OnChanges {
+export class SliderComponent implements OnChanges, OnInit {
   @Input() data!: DataInTimePoint[];
   @Input() width: number = 1000;
   @Input() marginLeft:number = 40;
@@ -17,14 +17,14 @@ export class SliderComponent implements OnChanges {
   @Input() height:number = 30;
   @Input() marginTop:number = 10;
 
-  dataPoint!: DataInTimePoint;
-
   constructor(private tradingDataService: TradingDataService){}
+
+  ngOnInit(){
+    this.tradingDataService.setDataPoint(this.data[0]);
+  }
 
   ngOnChanges(changes: SimpleChanges) {
     if(changes['data']) {
-      this.dataPoint = this.data[0];
-
       const times: Date[] = this.data.map(dataPoint => dataPoint.Time);
       const [minTime, maxTime] = d3.extent(times) as [Date, Date];
       const timeScale = d3.scaleTime()
@@ -69,7 +69,7 @@ export class SliderComponent implements OnChanges {
         const xToDate = timeScale.invert(event.x);
         const xData = this.data[d3.bisectCenter(times, xToDate)];
         dragElem.attr( "cx", timeScale(xData.Time));
-        this.tradingDataService.changeDataPoint(xData);
+        this.tradingDataService.setDataPoint(xData);
       }
       const drag = d3.drag<SVGCircleElement, any>()
         .on('drag', dragElement)
