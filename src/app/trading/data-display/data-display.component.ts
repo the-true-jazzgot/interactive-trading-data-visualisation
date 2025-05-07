@@ -1,18 +1,12 @@
 import { Component, OnInit, ViewEncapsulation } from '@angular/core';
-import { TradingDataService } from '../get-trading-data.service';
+import { TradingDataService } from '../../get-trading-data.service';
 import * as d3 from "d3";
-
-interface DataInTimePoint {
-  Time: Date,
-  values: {
-    price: number,
-    size: number
-  }[]
-}
+import { ChartComponent } from "../chart/chart.component";
+import { DataInTimePoint, PriceValue } from '../trading.interfaces'
 
 @Component({
   selector: 'app-data-display',
-  imports: [],
+  imports: [ChartComponent],
   templateUrl: './data-display.component.html',
   styleUrl: './data-display.component.scss',
   encapsulation: ViewEncapsulation.None //for generated SVG elements
@@ -47,7 +41,7 @@ export class DataDisplayComponent implements OnInit {
 
     this.dataPoint = this.chartData[0];
 
-    this.chart();
+    this.slider();
   }
 
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{
@@ -64,15 +58,14 @@ export class DataDisplayComponent implements OnInit {
       if(number) {
         let n = Number.parseInt(number[0]) - 1;
 
-        //Ask price
+        //Ask
         if(key[0] === "A" && key[key.length-1] !== "e"){
           formated.values[n] = {
             ...formated.values[n],
             price:dataInTimePoint[key],
+            type: 'ask'
           };
         }
-
-        //Ask size
         if(key[0] === "A" && key[key.length-1] === "e"){
           formated.values[n] = {
             ...formated.values[n],
@@ -80,16 +73,15 @@ export class DataDisplayComponent implements OnInit {
           };
         }
 
-        //Bid price
+        //Bid
         if(key[0] === "B" && key[key.length-1] !== "e"){
           n = n + numberOfAsks;
           formated.values[n] = {
             ...formated.values[n],
             price:dataInTimePoint[key],
+            type: 'bid'
           };
         }
-
-        //Bid size
         if(key[0] === "B" && key[key.length-1] === "e"){
           n = n + numberOfAsks;
           formated.values[n] = {
@@ -108,14 +100,14 @@ export class DataDisplayComponent implements OnInit {
     return formated;
   }
 
-  chart() {
+  slider() {
     const times: Date[] = this.chartData.map(dataPoint => dataPoint.Time);
     const [minTime, maxTime] = d3.extent(times) as [Date, Date];
     const timeScale = d3.scaleTime()
       .domain([minTime, maxTime])
       .range([this.marginLeft, this.width - this.marginRight]);
 
-    const timeSlider = d3.select('.dateSlider');
+    const timeSlider = d3.select('#sliderSVG .dateSlider');
     const timeAxis = timeSlider.append('line')
       .attr('x1', this.marginLeft)
       .attr('y1', `${this.marginTop + 2}px`)
@@ -141,6 +133,20 @@ export class DataDisplayComponent implements OnInit {
       .attr('text-anchor', 'middle')
       .classed('slider-label', true)
       .text(times[times.length - 1].toDateString());
+
+    const dragElement = (event: any) => {
+      dragElem.attr( "cx",() => {
+        if(event.x < timeAxis.attr('x1')) return timeAxis.attr('x1');
+        if(event.x > timeAxis.attr('x2')) return timeAxis.attr('x2');
+        return event.x
+      });
+    }
+    const dragEnd = (event:any) => {
+      const xToDate = timeScale.invert(event.x);
+      const xData = this.chartData[d3.bisectCenter(times, xToDate)];
+      dragElem.attr( "cx", timeScale(xData.Time));
+      this.dataPoint = xData;
+    }
     const drag = d3.drag<SVGCircleElement, any>()
       .on('drag', dragElement)
       .on('end', dragEnd);
@@ -152,25 +158,6 @@ export class DataDisplayComponent implements OnInit {
       .attr('stroke-width', '4px')
       .attr('fill', '#00000000')
       .classed('selector', true)
-      .call(drag)
-
-    function dragElement(event: any){
-      dragElem.attr( "cx",() => {
-        if(event.x < timeAxis.attr('x1')) return timeAxis.attr('x1');
-        if(event.x > timeAxis.attr('x2')) return timeAxis.attr('x2');
-        return event.x
-      });
-    }
-
-    const chartData = this.chartData;
-
-    function dragEnd(event:any){
-      const xToDate = timeScale.invert(event.x);
-      const xData = chartData[d3.bisectCenter(times, xToDate)];
-      dragElem.attr( "cx", timeScale(xData.Time));
-      console.log(xData);
-    }
+      .call(drag);
   }
-
-  
 }

@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { DataDisplayComponent } from "./data-display/data-display.component";
+import { DataDisplayComponent } from "./trading/data-display/data-display.component";
 
 @Component({
   selector: 'app-root',
