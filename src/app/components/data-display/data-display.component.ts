@@ -1,4 +1,4 @@
-import { Component, OnInit, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { GetTradingDataService } from '../../services/get-trading-data.service';
 import { ChartComponent } from "../trading/chart/chart.component";
 import { SliderComponent } from "../trading/slider/slider.component";
@@ -9,8 +9,7 @@ import { TradingDataService } from '../trading/trading-data-service.service';
   selector: 'app-data-display',
   imports: [ChartComponent, SliderComponent],
   templateUrl: './data-display.component.html',
-  styleUrl: './data-display.component.scss',
-  encapsulation: ViewEncapsulation.None //for generated SVG elements
+  styleUrl: './data-display.component.scss'
 })
 export class DataDisplayComponent implements OnInit {
   data!: any[];

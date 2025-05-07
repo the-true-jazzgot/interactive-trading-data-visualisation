@@ -27,12 +27,12 @@ export class ChartComponent implements OnInit, OnDestroy {
   constructor(private tradingDataService:TradingDataService){}
 
   ngOnInit() {
-    console.log('chart init')
-    this.chart = d3.select('#chartSVG');
+    this.chart = d3.select('#chartSVG')
+      .attr("preserveAspectRatio", "xMinYMin meet")
+      .attr("viewBox", `0 0 ${this.width} ${this.height}`);
 
     this.data$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
-        console.log(data)
         this.data = data;
         this.updateChart();
       },
@@ -46,20 +46,21 @@ export class ChartComponent implements OnInit, OnDestroy {
       .map(item => item.type === 'bid' ? {...item, size: (-item.size) as number} : item)
       .sort((a,b)=>a.price - b.price);
 
-    const maxSize = d3.max(this.values.map(item => item.size)) as number;
+    const maxSize = d3.max(this.data.values.map(item => item.size)) as number;
     const sizeScale = d3.scaleLinear()
-      .domain([-maxSize, maxSize])
+      .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
       .range([this.marginLeft, this.width - this.marginRight]);
     this.chart.append('g')
-      .attr("transform", "translate(0,50)")   
-      .call(d3.axisTop(sizeScale));
+      .attr("transform", `translate(0,${this.height - this.marginBottom})`)
+      .call(d3.axisBottom(sizeScale));
     
     const [minPrice, maxPrice] = d3.extent(this.data.values.map(value => value.price)) as [number, number];
+    const deltaPrice = maxPrice - minPrice;
     const prizeScale = d3.scaleLinear()
-      .domain([maxPrice, minPrice])
+      .domain([maxPrice + deltaPrice * .05, minPrice - deltaPrice * .05])
       .range([this.marginTop, this.height - this.marginBottom]);
     this.chart.append('g')
-      .attr("transform", "translate(50,0)")   
+      .attr("transform", `translate(${this.marginLeft},0)`)
       .call(d3.axisLeft(prizeScale));
 
     const zeroX = sizeScale(0);
@@ -74,7 +75,7 @@ export class ChartComponent implements OnInit, OnDestroy {
           .attr('fill', 'green');
         let b = this.chart.append('text')
           .attr('x', sizeScale(value.size) - 5)
-          .attr('y', prizeScale(value.price) + barHeight/2)
+          .attr('y', prizeScale(value.price) + barHeight/3)
           .attr('text-anchor', 'left')
           .classed('bar-label', true)
           .text(value.price);
@@ -88,7 +89,7 @@ export class ChartComponent implements OnInit, OnDestroy {
           .attr('fill', 'red');
         let b = this.chart.append('text')
           .attr('x', sizeScale(value.size) + 3)
-          .attr('y', prizeScale(value.price) + barHeight/2)
+          .attr('y', prizeScale(value.price) + barHeight/3)
           .attr('text-anchor', 'left')
           .classed('bar-label', true)
           .text(value.price);

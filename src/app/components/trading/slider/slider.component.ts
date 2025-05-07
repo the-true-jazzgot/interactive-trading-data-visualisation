@@ -1,4 +1,4 @@
-import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges, ViewEncapsulation } from '@angular/core';
 import { DataInTimePoint } from '../trading.interfaces';
 import * as d3 from 'd3';
 import { TradingDataService } from '../trading-data-service.service';
@@ -7,7 +7,8 @@ import { TradingDataService } from '../trading-data-service.service';
   selector: 'app-slider',
   imports: [],
   templateUrl: './slider.component.html',
-  styleUrl: './slider.component.scss'
+  styleUrl: './slider.component.scss',
+  encapsulation: ViewEncapsulation.None //for generated SVG elements
 })
 export class SliderComponent implements OnChanges, OnInit {
   @Input() data!: DataInTimePoint[];
@@ -31,58 +32,54 @@ export class SliderComponent implements OnChanges, OnInit {
         .domain([minTime, maxTime])
         .range([this.marginLeft, this.width - this.marginRight]);
 
-      const timeSlider = d3.select('#sliderSVG .dateSlider');
-      const timeAxis = timeSlider.append('line')
-        .attr('x1', this.marginLeft)
-        .attr('y1', `${this.marginTop + 2}px`)
-        .attr('x2', this.width - this.marginRight)
-        .attr('y2', `${this.marginTop + 2}px`)
-        .attr('stroke', 'black')
-        .attr('stroke-width', "2px");
+      d3.selectAll('#sliderSVG .dateSlider > *').remove();
+      const timeSlider = d3.select('#sliderSVG .dateSlider')
+        .attr("transform", `translate(0,${this.height/3})`);
+      timeSlider.append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', "100%")
+        .attr('height', '90%')
+        .attr('fill', '#00000000')
+        .attr("transform", `translate(0,-${this.height/3})`);;
+      timeSlider.append('g')
+        .call(d3.axisBottom(timeScale)
+          .tickSize(10));
       timeSlider.selectAll('circle')
         .data(this.data)
         .join('circle')
-        .attr('r', "3px")
-        .attr('cy', `${this.marginTop + 2}px`)
-        .attr('cx', timePoint => timeScale(timePoint.Time));
-      timeSlider.append('text')
-        .attr('x', this.marginLeft)
-        .attr('y', `${this.marginTop + 15}px`)
-        .attr('text-anchor', 'middle')
-        .classed('slider-label', true)
-        .text(times[0].toDateString());
-      timeSlider.append('text')
-        .attr('x', this.width - this.marginRight)
-        .attr('y', `${this.marginTop + 15}px`)
-        .attr('text-anchor', 'middle')
-        .classed('slider-label', true)
-        .text(times[times.length - 1].toDateString());
+        .attr('r', 3)
+        .attr('cy', 1)
+        .attr('cx', timePoint => timeScale(timePoint.Time))
+        .attr('fill', '#00000090');
 
-      const dragElement = (event: any) => {
+      const onDrag = (event: any) => {
         dragElem.attr( "cx",() => {
-          if(event.x < timeAxis.attr('x1')) return timeAxis.attr('x1');
-          if(event.x > timeAxis.attr('x2')) return timeAxis.attr('x2');
+          if(event.x < this.marginLeft) return this.marginLeft;
+          if(event.x > this.width - this.marginRight) return this.width - this.marginRight;
           return event.x
         });
       }
-      const dragEnd = (event:any) => {
+      const onDragEnd = (event:any) => {
         const xToDate = timeScale.invert(event.x);
         const xData = this.data[d3.bisectCenter(times, xToDate)];
         dragElem.attr( "cx", timeScale(xData.Time));
         this.tradingDataService.setDataPoint(xData);
       }
       const drag = d3.drag<SVGCircleElement, any>()
-        .on('drag', dragElement)
-        .on('end', dragEnd);
+        .on('drag', onDrag)
+        .on('end', onDragEnd);
       const dragElem = timeSlider.append('circle')
         .attr('r', "6px")
-        .attr('cy', `${this.marginTop + 2}px`)
+        .attr('cy', 1)
         .attr('cx', timeScale(times[0]))
         .attr('stroke', 'green')
         .attr('stroke-width', '4px')
         .attr('fill', '#00000000')
         .classed('selector', true)
         .call(drag);
+
+      timeSlider.on("click", event => onDragEnd(event));
     }
   }
 }
