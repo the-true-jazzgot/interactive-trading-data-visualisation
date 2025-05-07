@@ -1,12 +1,13 @@
 import { Component, OnInit, ViewEncapsulation } from '@angular/core';
-import { TradingDataService } from '../../get-trading-data.service';
-import * as d3 from "d3";
+import { GetTradingDataService } from '../../services/get-trading-data.service';
 import { ChartComponent } from "../chart/chart.component";
-import { DataInTimePoint, PriceValue } from '../trading.interfaces'
+import { SliderComponent } from "../slider/slider.component";
+import { DataInTimePoint } from '../trading.interfaces'
+import { TradingDataService } from '../../services/trading-data-service.service';
 
 @Component({
   selector: 'app-data-display',
-  imports: [ChartComponent],
+  imports: [ChartComponent, SliderComponent],
   templateUrl: './data-display.component.html',
   styleUrl: './data-display.component.scss',
   encapsulation: ViewEncapsulation.None //for generated SVG elements
@@ -14,18 +15,11 @@ import { DataInTimePoint, PriceValue } from '../trading.interfaces'
 export class DataDisplayComponent implements OnInit {
   data!: any[];
   chartData!: DataInTimePoint[];
-  error!: Error;
-  date: Date =  new Date(); //assumes it's todays data
+  error?: Error;
+  date: Date =  new Date(); //assumes todays data
   dataPoint!: DataInTimePoint;
 
-  //chart params
-  width = 1000;
-  marginLeft = 40;
-  marginRight = 40;
-  height = 30;
-  marginTop = 10;
-
-  constructor(private getTradingData: TradingDataService) {}
+  constructor(private getTradingData: GetTradingDataService, private tradingDataService: TradingDataService) {}
 
   ngOnInit(): void {
     this.getTradingData.getData().subscribe({
@@ -41,7 +35,12 @@ export class DataDisplayComponent implements OnInit {
 
     this.dataPoint = this.chartData[0];
 
-    this.slider();
+    this.tradingDataService.dataInTimePoint$.subscribe({
+      next: data => {
+        this.dataPoint = data;
+      },
+      error: e => this.error = e,
+    });
   }
 
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{
@@ -98,66 +97,5 @@ export class DataDisplayComponent implements OnInit {
       }
     });
     return formated;
-  }
-
-  slider() {
-    const times: Date[] = this.chartData.map(dataPoint => dataPoint.Time);
-    const [minTime, maxTime] = d3.extent(times) as [Date, Date];
-    const timeScale = d3.scaleTime()
-      .domain([minTime, maxTime])
-      .range([this.marginLeft, this.width - this.marginRight]);
-
-    const timeSlider = d3.select('#sliderSVG .dateSlider');
-    const timeAxis = timeSlider.append('line')
-      .attr('x1', this.marginLeft)
-      .attr('y1', `${this.marginTop + 2}px`)
-      .attr('x2', this.width - this.marginRight)
-      .attr('y2', `${this.marginTop + 2}px`)
-      .attr('stroke', 'black')
-      .attr('stroke-width', "2px");
-    timeSlider.selectAll('circle')
-      .data(this.chartData)
-      .join('circle')
-      .attr('r', "3px")
-      .attr('cy', `${this.marginTop + 2}px`)
-      .attr('cx', timePoint => timeScale(timePoint.Time));
-    timeSlider.append('text')
-      .attr('x', this.marginLeft)
-      .attr('y', `${this.marginTop + 15}px`)
-      .attr('text-anchor', 'middle')
-      .classed('slider-label', true)
-      .text(times[0].toDateString());
-    timeSlider.append('text')
-      .attr('x', this.width - this.marginRight)
-      .attr('y', `${this.marginTop + 15}px`)
-      .attr('text-anchor', 'middle')
-      .classed('slider-label', true)
-      .text(times[times.length - 1].toDateString());
-
-    const dragElement = (event: any) => {
-      dragElem.attr( "cx",() => {
-        if(event.x < timeAxis.attr('x1')) return timeAxis.attr('x1');
-        if(event.x > timeAxis.attr('x2')) return timeAxis.attr('x2');
-        return event.x
-      });
-    }
-    const dragEnd = (event:any) => {
-      const xToDate = timeScale.invert(event.x);
-      const xData = this.chartData[d3.bisectCenter(times, xToDate)];
-      dragElem.attr( "cx", timeScale(xData.Time));
-      this.dataPoint = xData;
-    }
-    const drag = d3.drag<SVGCircleElement, any>()
-      .on('drag', dragElement)
-      .on('end', dragEnd);
-    const dragElem = timeSlider.append('circle')
-      .attr('r', "6px")
-      .attr('cy', `${this.marginTop + 2}px`)
-      .attr('cx', timeScale(times[0]))
-      .attr('stroke', 'green')
-      .attr('stroke-width', '4px')
-      .attr('fill', '#00000000')
-      .classed('selector', true)
-      .call(drag);
   }
 }

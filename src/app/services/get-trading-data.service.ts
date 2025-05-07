@@ -1,12 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
 
-import * as mockTradingData from './mockData.json'
+import * as mockTradingData from '../mockData.json'
+import { DataInTimePoint } from '../trading/trading.interfaces';
 
 @Injectable({
   providedIn: 'root'
 })
-export class TradingDataService {
+export class GetTradingDataService {
   // constructor(private http: HttpClient) { }
 
   // getData(): Observable<any> {
