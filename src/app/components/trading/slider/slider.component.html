@@ -5,6 +5,13 @@
   Snapping to data points: {{isSnapingToDataPoint? 'on':'off'}}
 </mat-slide-toggle>
 
+<mat-slide-toggle 
+  aria-label="isContinousPrediction"
+  [checked]="isContinousPrediction"
+  (change)="isContinousPrediction = !isContinousPrediction">
+  Showing {{isContinousPrediction? 'possible projection of change between recorded data points':'absolute values of closest data points'}}
+</mat-slide-toggle>
+
 <svg  id="sliderSVG" [attr.width]="width" [attr.height]="height">
     <g class="dateSlider">
     </g>

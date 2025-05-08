@@ -1,8 +1,8 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import * as d3 from 'd3';
-import { DataInTimePoint, PriceValue } from '../trading.interfaces'
+import { DataInTimePoint, DrawBarArgs, PriceValue } from '../trading.interfaces'
 import { TradingDataService } from '../trading-data-service.service';
-import { Subscriber, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-chart',
@@ -17,13 +17,10 @@ export class ChartComponent implements OnInit, OnDestroy {
   @Input() marginRight: number = 150;
   @Input() marginTop: number = 40;
   @Input() marginBottom: number = 40;
-  data!: DataInTimePoint;
-  nextData?: DataInTimePoint;
+
   data$!: Subscription;
   error?: Error;
-
   values!: PriceValue[];
-  nextValues?: PriceValue[];
   chart!: d3.Selection<d3.BaseType, unknown, HTMLElement, any>;
 
   constructor(private tradingDataService:TradingDataService){}
@@ -35,17 +32,40 @@ export class ChartComponent implements OnInit, OnDestroy {
 
     this.data$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
-        if(Array.isArray(data)){
-          this.data = data[0];
-          this.nextData = data[1];
-        } else {
-          this.data = data;
-          this.nextData = undefined;
-        }
+        this.values = this.mergeDataPoints(data);
         this.updateChart();
       },
       error: e => this.error = e,
     });
+  }
+
+  mergeDataPoints([dataPoint1, dataPoint2]:[DataInTimePoint, DataInTimePoint | undefined]): PriceValue[]{
+    const lastPointData = dataPoint1.values.map(item => 
+      item.type === 'bid' ? {
+        ...item, 
+        size: (-item.size) as number,
+        timed: 'last'
+      } as PriceValue: 
+      {
+        ...item,
+        timed: 'last'
+      } as PriceValue
+    );
+    if(dataPoint2) {
+      const nextPointData = dataPoint2.values.map(item => 
+        item.type === 'bid' ? {
+          ...item, 
+          size: (-item.size) as number,
+          timed: 'next'
+        } as PriceValue: 
+        {
+          ...item,
+          timed: 'next'
+        } as PriceValue
+      );
+      return [...lastPointData, ...nextPointData].sort((a,b)=>a.price - b.price);
+    }
+    return lastPointData.sort((a,b)=>a.price - b.price);
   }
   
   updateChart(): void {
@@ -53,33 +73,16 @@ export class ChartComponent implements OnInit, OnDestroy {
         minPrice: number,
         maxPrice: number;
     d3.selectAll('#chartSVG > *').remove();
-    this.values = this.data.values
-      .map(item => item.type === 'bid' ? {...item, size: (-item.size) as number} : item)
-      .sort((a,b)=>a.price - b.price);
-
-    if(this.nextData) {
-      this.nextValues = this.nextData.values
-        .map(item => item.type === 'bid' ? {...item, size: (-item.size) as number} : item)
-        .sort((a,b)=>a.price - b.price);
-      maxSize = d3.max(
-        [...this.data.values, ...this.nextData.values].map(item => item.size)
-      ) as number;
-      [minPrice, maxPrice] = d3.extent(
-        [...this.data.values, ...this.nextData.values].map(value => value.price)
-      ) as [number, number];
-    } else {
-      this.nextValues = undefined;
-      maxSize = d3.max(this.data.values.map(item => item.size)) as number;
-      [minPrice, maxPrice] = d3.extent(this.data.values.map(value => value.price)) as [number, number];
-    }
-
-    const sizeScale = d3.scaleLinear()
-      .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
-      .range([this.marginLeft, this.width - this.marginRight]);
-    this.chart.append('g')
-      .attr("transform", `translate(0,${this.height - this.marginBottom})`)
-      .call(d3.axisBottom(sizeScale));
     
+    maxSize = d3.max(this.values.map(item => item.size)) as number;
+    const sizeScale = d3.scaleLinear()
+    .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
+    .range([this.marginLeft, this.width - this.marginRight]);
+    this.chart.append('g')
+    .attr("transform", `translate(0,${this.height - this.marginBottom})`)
+    .call(d3.axisBottom(sizeScale));
+    
+    [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
     const deltaPrice = maxPrice - minPrice;
     const prizeScale = d3.scaleLinear()
       .domain([maxPrice + deltaPrice * .05, minPrice - deltaPrice * .05])
@@ -90,42 +93,106 @@ export class ChartComponent implements OnInit, OnDestroy {
 
     const zeroX = sizeScale(0);
     const barHeight = prizeScale(minPrice) - prizeScale(minPrice + .00025);
-    const drawBars = (value:PriceValue, bidColor = '#00ff00', askColor = '#ff0000') => {
-      if(value.type === 'bid') {
-        this.chart.append('rect')
-          .attr('x', sizeScale(value.size))
-          .attr('y', prizeScale(value.price) - barHeight/2)
-          .attr('width', zeroX - sizeScale(value.size))
-          .attr('height', barHeight)
-          .attr('fill', bidColor);
-        let b = this.chart.append('text')
-          .attr('x', sizeScale(value.size) - 5)
-          .attr('y', prizeScale(value.price) + barHeight/3)
-          .attr('text-anchor', 'left')
-          .classed('bar-label', true)
-          .text(value.price);
-        b.attr('x', sizeScale(value.size) - (b.node()?.getBBox().width ?? 0));
+
+    //TODO: refactor to reduce redundancy
+    for(let i = 0; i < this.values.length; i++) {
+      if(this.values[i+1] && this.values[i].type === this.values[i+1].type && this.values[i].price === this.values[i+1].price){
+        const lastPrice = this.values[i];
+        const nextPrice = this.values[i+1];
+        const lastBarProps = {} as DrawBarArgs;
+        const nextBarProps = {} as DrawBarArgs;
+        const sizeDifference = (lastPrice.size - nextPrice.size) < 0;
+
+        lastBarProps.y = prizeScale(lastPrice.price) - barHeight/2;
+        lastBarProps.height = barHeight;
+        lastBarProps.text = lastPrice.price;
+
+        nextBarProps.y = prizeScale(lastPrice.price) - barHeight/2;
+        nextBarProps.height = barHeight;
+        nextBarProps.text = nextPrice.price;
+
+        if(lastPrice.type === 'bid'){
+          if(sizeDifference){
+            lastBarProps.x = sizeScale(nextPrice.size);
+            lastBarProps.width = zeroX - sizeScale(nextPrice.size);
+            lastBarProps.color = 'blue';
+            lastBarProps.isLabelOnLeft = true;
+            
+            nextBarProps.x = sizeScale(lastPrice.size);
+            nextBarProps.width = zeroX - sizeScale(lastPrice.size) - lastBarProps.width;
+            nextBarProps.color = 'red';
+            nextBarProps.isLabelOnLeft = true;
+          } else {
+            lastBarProps.x = sizeScale(lastPrice.size);
+            lastBarProps.width = zeroX - sizeScale(lastPrice.size);
+            lastBarProps.color = 'blue';
+            lastBarProps.isLabelOnLeft = true;
+            
+            nextBarProps.x = sizeScale(nextPrice.size);
+            nextBarProps.width = lastBarProps.x - sizeScale(nextPrice.size);
+            nextBarProps.color = 'green';
+            nextBarProps.isLabelOnLeft = true;
+          }
+        } else {
+          if(sizeDifference){
+            lastBarProps.x = zeroX;
+            lastBarProps.width = sizeScale(lastPrice.size) - zeroX;
+            lastBarProps.color = 'violet';
+
+            nextBarProps.x = zeroX + lastBarProps.width;
+            nextBarProps.width =  sizeScale(nextPrice.size) - zeroX - lastBarProps.width;
+            nextBarProps.color = 'green';
+          } else {
+            lastBarProps.x = zeroX;
+            lastBarProps.width = sizeScale(nextPrice.size) - zeroX;
+            lastBarProps.color = 'violet';
+
+            nextBarProps.x = sizeScale(nextPrice.size);
+            nextBarProps.width =  sizeScale(lastPrice.size) - zeroX - lastBarProps.width;
+            nextBarProps.color = 'red';
+          }
+        }
+
+        this.drawBar(lastBarProps);
+        this.drawBar(nextBarProps);
+        i++;
       } else {
-        this.chart.append('rect')
-          .attr('x', zeroX)
-          .attr('y', prizeScale(value.price) - barHeight/2)
-          .attr('width', sizeScale(value.size) - zeroX)
-          .attr('height', barHeight)
-          .attr('fill', askColor);
-        let b = this.chart.append('text')
-          .attr('x', sizeScale(value.size) + 3)
-          .attr('y', prizeScale(value.price) + barHeight/3)
-          .attr('text-anchor', 'left')
-          .classed('bar-label', true)
-          .text(value.price);
+        const price = this.values[i];
+        const barProps = {} as DrawBarArgs;
+
+        barProps.y = prizeScale(price.price) - barHeight/2;
+        barProps.height = barHeight;
+        barProps.text = price.price;
+
+        if(price.type === 'bid'){
+          barProps.x = sizeScale(price.size);
+          barProps.width = zeroX - sizeScale(price.size);
+          price.timed === 'last' ? barProps.color = 'blue' : barProps.color = 'lightblue';
+          barProps.isLabelOnLeft = true;
+        } else {
+          barProps.x = zeroX;
+          barProps.width = sizeScale(price.size) - zeroX;
+          price.timed === 'last' ? barProps.color = 'purple' : barProps.color = 'violet';
+        }
+        this.drawBar(barProps);
       }
     }
-    this.values.forEach(value => {
-      drawBars(value);
-    });
-    this.nextValues && this.nextValues.forEach(value => {
-      drawBars(value, '#00ff0055', '#ff000055');
-    });
+  }
+  
+  drawBar = (props:DrawBarArgs) => {
+    this.chart.append('rect')
+      .attr('x', props.x)
+      .attr('y', props.y)
+      .attr('width', props.width)
+      .attr('height', props.height)
+      .attr('fill', props.color);
+    let b = this.chart.append('text')
+      .attr('x', props.x + 3)
+      .attr('y', props.y)
+      .attr('text-anchor', 'left')
+      .classed('bar-label', true)
+      .text(props.text);
+    props.isLabelOnLeft && b.attr('x', props.x - (b.node()?.getBBox().width ?? 0));
   }
 
   ngOnDestroy(){

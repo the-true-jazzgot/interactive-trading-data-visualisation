@@ -19,6 +19,7 @@ export class SliderComponent implements OnChanges, OnInit {
   @Input() height:number = 30;
   @Input() marginTop:number = 10;
   isSnapingToDataPoint = true;
+  isContinousPrediction = false;
   animate = false;
 
   times!: Date[];
@@ -30,7 +31,7 @@ export class SliderComponent implements OnChanges, OnInit {
   constructor(private tradingDataService: TradingDataService){}
 
   ngOnInit(){
-    this.tradingDataService.setDataPoint(this.data[0]);
+    this.tradingDataService.setDataPoints(this.data[0], undefined);
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -85,28 +86,30 @@ export class SliderComponent implements OnChanges, OnInit {
   }
   
   updateChart(event:any, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
-    dragElem.attr( "cx",() => {
+    const getDragElemPosition = () => {
       if(event.x < this.marginLeft) return this.marginLeft;
       if(event.x > this.width - this.marginRight) return this.width - this.marginRight;
       return event.x
-    });
+    }
+    dragElem.attr( "cx", getDragElemPosition());
     const xToDate = timeScale.invert(event.x);
     const closestDataPointIndex = d3.bisectCenter(this.times, xToDate);
     const closestDataPoint = this.data[closestDataPointIndex];
     if(this.isSnapingToDataPoint){
       dragElem.attr( "cx", this.timeScale(closestDataPoint.Time));
-      this.tradingDataService.setDataPoint(closestDataPoint);
+      this.tradingDataService.setDataPoints(closestDataPoint, undefined);
     } else {
-      dragElem.attr( "cx", event.x);
+      dragElem.attr( "cx", getDragElemPosition());
       const difference = closestDataPoint.Time.getTime() - xToDate.getTime();
-      let nextDataPoint;
+      let nextDataPoint = undefined;
 
       if(difference < 0) {
         nextDataPoint = this.data[closestDataPointIndex - 1];
-      } else {
+      } 
+      if(difference > 0) {
         nextDataPoint = this.data[closestDataPointIndex + 1];
       }
-      this.tradingDataService.setClosestDataPoints(closestDataPoint, nextDataPoint);
+      this.tradingDataService.setDataPoints(closestDataPoint, nextDataPoint);
     }
   }
 
