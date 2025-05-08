@@ -12,4 +12,8 @@ export class TradingDataService {
   setDataPoint(dataPoint: DataInTimePoint){
     this.dataInTimePoint.next(dataPoint);
   }
+
+  setClosestDataPoints(date:Date){
+    
+  }
 }

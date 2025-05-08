@@ -1,3 +1,10 @@
+<mat-slide-toggle 
+  aria-label="isSnapingToDataPoint"
+  [checked]="isSnapingToDataPoint"
+  (change)="toggleSnapping($event, timeScale, dragElem)">
+  Snapping to data points: {{isSnapingToDataPoint? 'on':'off'}}
+</mat-slide-toggle>
+
 <svg  id="sliderSVG" [attr.width]="width" [attr.height]="height">
     <g class="dateSlider">
     </g>
