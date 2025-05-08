@@ -24,9 +24,8 @@ export class SliderComponent implements OnChanges, OnInit {
   times!: Date[];
   timeScale!: d3.ScaleTime<number, number, never>;
   dragElem!: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>;
-  drag = d3.drag<SVGCircleElement, any>()
-    .on('drag', e => this.onDrag(e, this.dragElem))
-    .on('end', e => this.onDragEnd(e, this.timeScale, this.dragElem));
+  drag = d3.drag<SVGGElement, any>()
+    .on('drag', e => this.updateChart(e, this.timeScale, this.dragElem));
 
   constructor(private tradingDataService: TradingDataService){}
 
@@ -43,9 +42,12 @@ export class SliderComponent implements OnChanges, OnInit {
         .range([this.marginLeft, this.width - this.marginRight]);
 
       d3.selectAll('#sliderSVG .dateSlider > *').remove();
-      const timeSlider = d3.select('#sliderSVG .dateSlider')
+      const timeSlider = d3.select<SVGGElement, any>('#sliderSVG .dateSlider')
         .attr("transform", `translate(0,${this.height/3})`)
-        .on("click", event => this.onDragEnd(event, this.timeScale, this.dragElem));
+        .on("mousedown", event => {
+          this.updateChart(event, this.timeScale, this.dragElem);
+        })
+        .call(this.drag);
       timeSlider.append('rect')
         .attr('x', 0)
         .attr('y', 0)
@@ -71,19 +73,23 @@ export class SliderComponent implements OnChanges, OnInit {
         .attr('stroke-width', '4px')
         .attr('fill', '#00000000')
         .classed('selector', true)
-        .call(this.drag);
+        ;
     }
   }
-
-  onDrag(event: any, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
+  
+  toggleSnapping(e: MatSlideToggleChange, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>){
+    this.isSnapingToDataPoint = e.checked;
+    if(this.isSnapingToDataPoint){
+      this.updateChart({x: this.dragElem.attr('cx')}, timeScale, dragElem);
+    }
+  }
+  
+  updateChart(event:any, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
     dragElem.attr( "cx",() => {
       if(event.x < this.marginLeft) return this.marginLeft;
       if(event.x > this.width - this.marginRight) return this.width - this.marginRight;
       return event.x
     });
-  }
-
-  onDragEnd(event:any, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
     const xToDate = timeScale.invert(event.x);
     const closestDataPointIndex = d3.bisectCenter(this.times, xToDate);
     const closestDataPoint = this.data[closestDataPointIndex];
@@ -104,10 +110,4 @@ export class SliderComponent implements OnChanges, OnInit {
     }
   }
 
-  toggleSnapping(e: MatSlideToggleChange, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>){
-    this.isSnapingToDataPoint = e.checked;
-    if(this.isSnapingToDataPoint){
-      this.onDragEnd({x: this.dragElem.attr('cx')}, timeScale, dragElem);
-    }
-  }
 }
