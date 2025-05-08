@@ -85,13 +85,22 @@ export class SliderComponent implements OnChanges, OnInit {
 
   onDragEnd(event:any, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
     const xToDate = timeScale.invert(event.x);
+    const closestDataPointIndex = d3.bisectCenter(this.times, xToDate);
+    const closestDataPoint = this.data[closestDataPointIndex];
     if(this.isSnapingToDataPoint){
-      const xData = this.data[d3.bisectCenter(this.times, xToDate)];
-      dragElem.attr( "cx", this.timeScale(xData.Time));
-      this.tradingDataService.setDataPoint(xData);
+      dragElem.attr( "cx", this.timeScale(closestDataPoint.Time));
+      this.tradingDataService.setDataPoint(closestDataPoint);
     } else {
       dragElem.attr( "cx", event.x);
-      this.tradingDataService.setClosestDataPoints(this.timeScale.invert(event.x));
+      const difference = closestDataPoint.Time.getTime() - xToDate.getTime();
+      let nextDataPoint;
+
+      if(difference < 0) {
+        nextDataPoint = this.data[closestDataPointIndex - 1];
+      } else {
+        nextDataPoint = this.data[closestDataPointIndex + 1];
+      }
+      this.tradingDataService.setClosestDataPoints(closestDataPoint, nextDataPoint);
     }
   }
 

@@ -18,10 +18,12 @@ export class ChartComponent implements OnInit, OnDestroy {
   @Input() marginTop: number = 40;
   @Input() marginBottom: number = 40;
   data!: DataInTimePoint;
+  nextData?: DataInTimePoint;
   data$!: Subscription;
   error?: Error;
 
   values!: PriceValue[];
+  nextValues?: PriceValue[];
   chart!: d3.Selection<d3.BaseType, unknown, HTMLElement, any>;
 
   constructor(private tradingDataService:TradingDataService){}
@@ -33,7 +35,13 @@ export class ChartComponent implements OnInit, OnDestroy {
 
     this.data$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
-        this.data = data;
+        if(Array.isArray(data)){
+          this.data = data[0];
+          this.nextData = data[1];
+        } else {
+          this.data = data;
+          this.nextData = undefined;
+        }
         this.updateChart();
       },
       error: e => this.error = e,
@@ -41,12 +49,30 @@ export class ChartComponent implements OnInit, OnDestroy {
   }
   
   updateChart(): void {
+    let maxSize: number,
+        minPrice: number,
+        maxPrice: number;
     d3.selectAll('#chartSVG > *').remove();
     this.values = this.data.values
       .map(item => item.type === 'bid' ? {...item, size: (-item.size) as number} : item)
       .sort((a,b)=>a.price - b.price);
 
-    const maxSize = d3.max(this.data.values.map(item => item.size)) as number;
+    if(this.nextData) {
+      this.nextValues = this.nextData.values
+        .map(item => item.type === 'bid' ? {...item, size: (-item.size) as number} : item)
+        .sort((a,b)=>a.price - b.price);
+      maxSize = d3.max(
+        [...this.data.values, ...this.nextData.values].map(item => item.size)
+      ) as number;
+      [minPrice, maxPrice] = d3.extent(
+        [...this.data.values, ...this.nextData.values].map(value => value.price)
+      ) as [number, number];
+    } else {
+      this.nextValues = undefined;
+      maxSize = d3.max(this.data.values.map(item => item.size)) as number;
+      [minPrice, maxPrice] = d3.extent(this.data.values.map(value => value.price)) as [number, number];
+    }
+
     const sizeScale = d3.scaleLinear()
       .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
       .range([this.marginLeft, this.width - this.marginRight]);
@@ -54,7 +80,6 @@ export class ChartComponent implements OnInit, OnDestroy {
       .attr("transform", `translate(0,${this.height - this.marginBottom})`)
       .call(d3.axisBottom(sizeScale));
     
-    const [minPrice, maxPrice] = d3.extent(this.data.values.map(value => value.price)) as [number, number];
     const deltaPrice = maxPrice - minPrice;
     const prizeScale = d3.scaleLinear()
       .domain([maxPrice + deltaPrice * .05, minPrice - deltaPrice * .05])
@@ -65,14 +90,14 @@ export class ChartComponent implements OnInit, OnDestroy {
 
     const zeroX = sizeScale(0);
     const barHeight = prizeScale(minPrice) - prizeScale(minPrice + .00025);
-    this.values.forEach(value => {
+    const drawBars = (value:PriceValue, bidColor = '#00ff00', askColor = '#ff0000') => {
       if(value.type === 'bid') {
         this.chart.append('rect')
           .attr('x', sizeScale(value.size))
           .attr('y', prizeScale(value.price) - barHeight/2)
           .attr('width', zeroX - sizeScale(value.size))
           .attr('height', barHeight)
-          .attr('fill', 'green');
+          .attr('fill', bidColor);
         let b = this.chart.append('text')
           .attr('x', sizeScale(value.size) - 5)
           .attr('y', prizeScale(value.price) + barHeight/3)
@@ -86,7 +111,7 @@ export class ChartComponent implements OnInit, OnDestroy {
           .attr('y', prizeScale(value.price) - barHeight/2)
           .attr('width', sizeScale(value.size) - zeroX)
           .attr('height', barHeight)
-          .attr('fill', 'red');
+          .attr('fill', askColor);
         let b = this.chart.append('text')
           .attr('x', sizeScale(value.size) + 3)
           .attr('y', prizeScale(value.price) + barHeight/3)
@@ -94,6 +119,12 @@ export class ChartComponent implements OnInit, OnDestroy {
           .classed('bar-label', true)
           .text(value.price);
       }
+    }
+    this.values.forEach(value => {
+      drawBars(value);
+    });
+    this.nextValues && this.nextValues.forEach(value => {
+      drawBars(value, '#00ff0055', '#ff000055');
     });
   }
 

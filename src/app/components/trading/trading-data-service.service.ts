@@ -6,14 +6,14 @@ import { DataInTimePoint } from './trading.interfaces';
   providedIn: 'root'
 })
 export class TradingDataService {
-  private dataInTimePoint = new ReplaySubject<DataInTimePoint>(1);
+  private dataInTimePoint = new ReplaySubject<DataInTimePoint | [DataInTimePoint, DataInTimePoint]>(1);
   dataInTimePoint$ = this.dataInTimePoint.asObservable();
 
   setDataPoint(dataPoint: DataInTimePoint){
     this.dataInTimePoint.next(dataPoint);
   }
 
-  setClosestDataPoints(date:Date){
-    
+  setClosestDataPoints(closestDataPoint:DataInTimePoint, nextDataPoint: DataInTimePoint){
+    this.dataInTimePoint.next([closestDataPoint, nextDataPoint]);
   }
 }
