@@ -2,7 +2,7 @@ export interface PriceValue {
     price: number,
     size: number,
     type: 'ask' | 'bid',
-    timed?: 'last' | 'next'
+    compareAs?: 'last' | 'next'
 }
 
 export interface DataInTimePoint {

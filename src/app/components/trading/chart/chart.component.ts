@@ -21,12 +21,12 @@ export class ChartComponent implements OnInit, OnDestroy {
   data$!: Subscription;
   error?: Error;
   values!: PriceValue[];
-  chart!: d3.Selection<d3.BaseType, unknown, HTMLElement, any>;
+  chart!: d3.Selection<SVGSVGElement, undefined, HTMLElement, undefined>;
 
   constructor(private tradingDataService:TradingDataService){}
 
   ngOnInit() {
-    this.chart = d3.select('#chartSVG')
+    this.chart = d3.select<SVGSVGElement, undefined>('#chartSVG')
       .attr("preserveAspectRatio", "xMinYMin meet")
       .attr("viewBox", `0 0 ${this.width} ${this.height}`);
 
@@ -39,50 +39,41 @@ export class ChartComponent implements OnInit, OnDestroy {
     });
   }
 
-  mergeDataPoints([dataPoint1, dataPoint2]:[DataInTimePoint, DataInTimePoint | undefined]): PriceValue[]{
+  mergeDataPoints([dataPoint1, dataPoint2]:[DataInTimePoint, DataInTimePoint | undefined]): PriceValue[] {
     const lastPointData = dataPoint1.values.map(item => 
       item.type === 'bid' ? {
         ...item, 
         size: (-item.size) as number,
-        timed: 'last'
+        compareAs: 'last'
       } as PriceValue: 
-      {
-        ...item,
-        timed: 'last'
-      } as PriceValue
+      Object.assign(item, {compareAs: 'last'})
     );
     if(dataPoint2) {
       const nextPointData = dataPoint2.values.map(item => 
         item.type === 'bid' ? {
           ...item, 
           size: (-item.size) as number,
-          timed: 'next'
+          compareAs: 'next'
         } as PriceValue: 
-        {
-          ...item,
-          timed: 'next'
-        } as PriceValue
+        Object.assign(item, {compareAs: 'next'})
       );
-      return [...lastPointData, ...nextPointData].sort((a,b)=>a.price - b.price);
+      return lastPointData.concat(nextPointData).sort((a,b)=>a.price - b.price);
     }
-    return lastPointData.sort((a,b)=>a.price - b.price);
+    return lastPointData.sort((a,b)=>a.price - b.price);;
   }
   
   updateChart(): void {
-    let maxSize: number,
-        minPrice: number,
-        maxPrice: number;
     d3.selectAll('#chartSVG > *').remove();
     
-    maxSize = d3.max(this.values.map(item => item.size)) as number;
+    const maxSize = d3.max(this.values.map(item => item.size)) as number;
     const sizeScale = d3.scaleLinear()
-    .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
-    .range([this.marginLeft, this.width - this.marginRight]);
+      .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
+      .range([this.marginLeft, this.width - this.marginRight]);
     this.chart.append('g')
-    .attr("transform", `translate(0,${this.height - this.marginBottom})`)
-    .call(d3.axisBottom(sizeScale));
+      .attr("transform", `translate(0,${this.height - this.marginBottom})`)
+      .call(d3.axisBottom(sizeScale));
     
-    [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
+    const [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
     const deltaPrice = maxPrice - minPrice;
     const prizeScale = d3.scaleLinear()
       .domain([maxPrice + deltaPrice * .05, minPrice - deltaPrice * .05])
@@ -92,9 +83,8 @@ export class ChartComponent implements OnInit, OnDestroy {
       .call(d3.axisLeft(prizeScale));
 
     const zeroX = sizeScale(0);
-    const barHeight = prizeScale(minPrice) - prizeScale(minPrice + .00025);
+    const barHeight = prizeScale(0) - prizeScale(.0003);
 
-    //TODO: refactor to reduce redundancy
     for(let i = 0; i < this.values.length; i++) {
       if(this.values[i+1] && this.values[i].type === this.values[i+1].type && this.values[i].price === this.values[i+1].price){
         const lastPrice = this.values[i];
@@ -167,12 +157,12 @@ export class ChartComponent implements OnInit, OnDestroy {
         if(price.type === 'bid'){
           barProps.x = sizeScale(price.size);
           barProps.width = zeroX - sizeScale(price.size);
-          price.timed === 'last' ? barProps.color = 'blue' : barProps.color = 'lightblue';
+          price.compareAs === 'last' ? barProps.color = 'blue' : barProps.color = 'lightblue';
           barProps.isLabelOnLeft = true;
         } else {
           barProps.x = zeroX;
           barProps.width = sizeScale(price.size) - zeroX;
-          price.timed === 'last' ? barProps.color = 'purple' : barProps.color = 'violet';
+          price.compareAs === 'last' ? barProps.color = 'purple' : barProps.color = 'violet';
         }
         this.drawBar(barProps);
       }

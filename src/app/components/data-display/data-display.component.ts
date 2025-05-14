@@ -4,10 +4,11 @@ import { ChartComponent } from "../trading/chart/chart.component";
 import { SliderComponent } from "../trading/slider/slider.component";
 import { DataInTimePoint } from '../trading/trading.interfaces'
 import { TradingDataService } from '../trading/trading-data-service.service';
+import { D3ChartComponent } from '../trading/D3Chart/d3chart.component';
 
 @Component({
   selector: 'app-data-display',
-  imports: [ChartComponent, SliderComponent],
+  imports: [ChartComponent, SliderComponent, D3ChartComponent],
   templateUrl: './data-display.component.html',
   styleUrl: './data-display.component.scss'
 })
