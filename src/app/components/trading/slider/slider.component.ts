@@ -12,21 +12,23 @@ import { MatSlideToggleChange, MatSlideToggleModule } from '@angular/material/sl
   encapsulation: ViewEncapsulation.None //for generated SVG elements
 })
 export class SliderComponent implements OnChanges, OnInit {
-  @Input() data!: DataInTimePoint[];
-  @Input() width: number = 1000;
-  @Input() marginLeft:number = 40;
-  @Input() marginRight:number = 40;
-  @Input() height:number = 30;
-  @Input() marginTop:number = 10;
+  @Input({required: true}) data!: DataInTimePoint[];
+  @Input() width = 1000;
+  @Input() marginLeft = 40;
+  @Input() marginRight = 40;
+  @Input() height = 30;
+  @Input() marginTop = 10;
+  @Input() speed = 3; //1 = 100 times faster than irl
   isSnapingToDataPoint = true;
   isContinousPrediction = false;
-  animate = false;
+  isAnimating = false;
 
   times!: Date[];
   timeScale!: d3.ScaleTime<number, number, never>;
-  dragElem!: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>;
+  dragElem!: d3.Selection<SVGCircleElement, undefined, HTMLElement, undefined>;
   drag = d3.drag<SVGGElement, any>()
-    .on('drag', e => this.updateChart(e, this.timeScale, this.dragElem));
+    .on('drag', e => this.updateChart(e.x));
+  position = 1;
 
   constructor(private tradingDataService: TradingDataService){}
 
@@ -43,11 +45,9 @@ export class SliderComponent implements OnChanges, OnInit {
         .range([this.marginLeft, this.width - this.marginRight]);
 
       d3.selectAll('#sliderSVG .dateSlider > *').remove();
-      const timeSlider = d3.select<SVGGElement, any>('#sliderSVG .dateSlider')
+      const timeSlider = d3.select<SVGGElement, undefined>('#sliderSVG .dateSlider')
         .attr("transform", `translate(0,${this.height/3})`)
-        .on("mousedown", event => {
-          this.updateChart(event, this.timeScale, this.dragElem);
-        })
+        .on("mousedown", event => this.updateChart(event.x))
         .call(this.drag);
       timeSlider.append('rect')
         .attr('x', 0)
@@ -73,33 +73,53 @@ export class SliderComponent implements OnChanges, OnInit {
         .attr('stroke', 'green')
         .attr('stroke-width', '4px')
         .attr('fill', '#00000000')
-        .classed('selector', true)
-        ;
+        .classed('selector', true);
     }
   }
+
+  toggleAnimation(e: MatSlideToggleChange) {
+    this.isAnimating = e.checked;
+    const interval = 33; //around 30 fps
+    let lastTime = 0;
+
+    const animate = (currentTime:number) => {
+      const deltaTime = currentTime - lastTime;
+      if (deltaTime > interval) {
+        const currX = this.timeScale.invert(Number.parseFloat(this.dragElem.attr('cx')));
+        const  newX = this.timeScale(currX.getTime() + (interval * this.speed * 3));
+        this.updateChart(newX);
+        lastTime = currentTime;
+      }
+      if(this.isAnimating){
+        requestAnimationFrame(animate);
+      }
+    }
+    requestAnimationFrame(animate);
+  }
   
-  toggleSnapping(e: MatSlideToggleChange, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>){
+  toggleSnapping(e: MatSlideToggleChange){
     this.isSnapingToDataPoint = e.checked;
     if(this.isSnapingToDataPoint){
-      this.updateChart({x: this.dragElem.attr('cx')}, timeScale, dragElem);
+      this.updateChart(Number.parseInt(this.dragElem.attr('cx')));
     }
   }
   
-  updateChart(event:any, timeScale: d3.ScaleTime<number, number, never>, dragElem: d3.Selection<SVGCircleElement, unknown, HTMLElement, any>) {
+  updateChart(x:number) {
     const getDragElemPosition = () => {
-      if(event.x < this.marginLeft) return this.marginLeft;
-      if(event.x > this.width - this.marginRight) return this.width - this.marginRight;
-      return event.x
+      console.log(x)
+      if(x < this.marginLeft) return this.marginLeft;
+      if(x > this.width - this.marginRight) return this.width - this.marginRight;
+      return x
     }
-    dragElem.attr( "cx", getDragElemPosition());
-    const xToDate = timeScale.invert(event.x);
+    this.dragElem.attr( "cx", getDragElemPosition());
+    const xToDate = this.timeScale.invert(x);
     const closestDataPointIndex = d3.bisectCenter(this.times, xToDate);
     const closestDataPoint = this.data[closestDataPointIndex];
     if(this.isSnapingToDataPoint){
-      dragElem.attr( "cx", this.timeScale(closestDataPoint.Time));
+      this.dragElem.attr( "cx", this.timeScale(closestDataPoint.Time));
       this.tradingDataService.setDataPoints(closestDataPoint, undefined);
     } else {
-      dragElem.attr( "cx", getDragElemPosition());
+      this.dragElem.attr( "cx", getDragElemPosition());
       const difference = closestDataPoint.Time.getTime() - xToDate.getTime();
       let nextDataPoint = undefined;
 
@@ -112,5 +132,4 @@ export class SliderComponent implements OnChanges, OnInit {
       this.tradingDataService.setDataPoints(closestDataPoint, nextDataPoint);
     }
   }
-
 }

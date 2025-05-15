@@ -1,7 +1,7 @@
 <mat-slide-toggle 
   aria-label="isSnapingToDataPoint"
   [checked]="isSnapingToDataPoint"
-  (change)="toggleSnapping($event, timeScale, dragElem)">
+  (change)="toggleSnapping($event)">
   Snapping to data points: {{isSnapingToDataPoint? 'on':'off'}}
 </mat-slide-toggle>
 
@@ -10,6 +10,13 @@
   [checked]="isContinousPrediction"
   (change)="isContinousPrediction = !isContinousPrediction">
   Showing {{isContinousPrediction? 'possible projection of change between recorded data points':'absolute values of closest data points'}}
+</mat-slide-toggle>
+
+<mat-slide-toggle 
+  aria-label="isAnimate"
+  [checked]="isAnimating"
+  (change)="toggleAnimation($event)">
+  Amination: {{isAnimating ? 'On':'Off'}}
 </mat-slide-toggle>
 
 <svg  id="sliderSVG" [attr.width]="width" [attr.height]="height">

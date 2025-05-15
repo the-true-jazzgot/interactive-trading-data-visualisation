@@ -161,11 +161,10 @@ export class D3ChartComponent implements OnInit, OnDestroy {
       })(typeRollup(this.values))
 
     const color = (key: string)=>{
-      console.log(key);
       if(key === 'lastAsk') return 'blue';
       if(key === 'lastBid') return 'orange';
       if(key === 'nextBid') return 'pink';
-      if(key === 'nextAsk') return 'violet';
+      if(key === 'nextAsk') return 'purple';
       if(key === 'negativeAskDifference' || key === 'negativeBidDifference') return 'red';
       if(key === 'positiveAskDifference' || key === 'positiveBidDifference') return 'green';
       const error = new Error('Invalid key in bar chart stack in chart componentc');
