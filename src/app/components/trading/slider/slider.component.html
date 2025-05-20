@@ -8,7 +8,7 @@
 <mat-slide-toggle 
   aria-label="isContinousPrediction"
   [checked]="isContinousPrediction"
-  (change)="isContinousPrediction = !isContinousPrediction">
+  (change)="toggleContinousPrediction($event)">
   Showing {{isContinousPrediction? 'possible projection of change between recorded data points':'absolute values of closest data points'}}
 </mat-slide-toggle>
 

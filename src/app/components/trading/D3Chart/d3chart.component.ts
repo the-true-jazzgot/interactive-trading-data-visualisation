@@ -19,8 +19,10 @@ export class D3ChartComponent implements OnInit, OnDestroy {
   @Input() marginBottom: number = 40;
 
   data$!: Subscription;
+  percentage$!: Subscription;
   error?: Error;
   values!: PriceValue[];
+  percentage = 1;
   chart!: d3.Selection<SVGSVGElement, undefined, HTMLElement, undefined>;
 
   constructor(private tradingDataService:TradingDataService){}
@@ -33,6 +35,14 @@ export class D3ChartComponent implements OnInit, OnDestroy {
     this.data$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
         this.values = this.extractValuesFromDataPoints(data);
+        this.updateChart();
+      },
+      error: e => this.error = e,
+    });
+
+    this.percentage$ = this.tradingDataService.percentage$.subscribe({
+      next: data => {
+        this.percentage = data
         this.updateChart();
       },
       error: e => this.error = e,
@@ -69,8 +79,9 @@ export class D3ChartComponent implements OnInit, OnDestroy {
 
     const barHeight = prizeScale(0) - prizeScale(.0003);
 
-    const keys = ['lastBid', 'nextBid', 'negativeBidDifference', 'positiveBidDifference', 'lastAsk', 'nextAsk', 'negativeAskDifference', 'positiveAskDifference'];
-    const getCategory = (d:PriceValue): string => {
+    const keys = ['lastBid', 'nextBid', 'negativeBidDifference', 'positiveBidDifference', 'lastAsk', 'nextAsk', 'negativeAskDifference', 'positiveAskDifference'] as const;
+    type ChartDataBar = (typeof keys)[number];
+    const getCategory = (d:PriceValue): ChartDataBar => {
       if(d.type === 'ask' && d.compareAs === 'last')
         return 'lastAsk'
       if(d.type === 'ask' && d.compareAs === 'next')
@@ -84,15 +95,15 @@ export class D3ChartComponent implements OnInit, OnDestroy {
       throw error;
     }
 
-    const calculateSizes = (rollup: d3.InternMap<string, PriceValue>):d3.InternMap<string, PriceValue> => {
+    const calculateSizes = (rollup: d3.InternMap<ChartDataBar, PriceValue>):d3.InternMap<ChartDataBar, PriceValue> => {
       let lastBid: PriceValue | undefined = rollup.get('lastBid');
       let nextBid: PriceValue | undefined = rollup.get('nextBid');
       let lastAsk: PriceValue | undefined = rollup.get('lastAsk');
       let nextAsk: PriceValue | undefined = rollup.get('nextAsk');
-          
+      const returnPriceValues =  new d3.InternMap<ChartDataBar, PriceValue>();
+      
       if(!!nextBid && !!lastBid){
-        const sizeDifference = lastBid.size - nextBid.size
-
+        const sizeDifference = (lastBid.size - nextBid.size)*this.percentage;
         if(sizeDifference > 0) {
           lastBid = {
             ...lastBid,
@@ -102,24 +113,28 @@ export class D3ChartComponent implements OnInit, OnDestroy {
             ...nextBid,
             size: sizeDifference
           };
-          return new d3.InternMap([
-            ['lastBid', lastBid],
-            ['negativeBidDifference', nextBid],
-          ]);
+          returnPriceValues.set('lastBid', lastBid);
+          returnPriceValues.set('negativeBidDifference', nextBid);
+        } else {
+          nextBid = {
+            ...nextBid,
+            size: -sizeDifference
+          };
+          returnPriceValues.set('lastBid', lastBid);
+          returnPriceValues.set('positiveBidDifference', nextBid);
         }
-
-        nextBid = {
-          ...nextBid,
-          size: -sizeDifference
-        };
-        return new d3.InternMap([
-          ['lastBid', lastBid],
-          ['positiveBidDifference', nextBid],
-        ]);
+      } else if(!nextBid && !!lastBid){
+        returnPriceValues.set('lastBid', lastBid);
+      } else if(!!nextBid && !lastBid){
+          nextBid = {
+            ...nextBid,
+            size: nextBid.size * this.percentage
+          };
+        returnPriceValues.set('nextBid', nextBid);
       }
 
       if(!!nextAsk && !!lastAsk){
-        const sizeDifference = lastAsk.size - nextAsk.size
+        const sizeDifference = (lastAsk.size - nextAsk.size)*this.percentage;
 
         if(sizeDifference > 0) {
           lastAsk = {
@@ -130,41 +145,46 @@ export class D3ChartComponent implements OnInit, OnDestroy {
             ...nextAsk,
             size: sizeDifference
           }
-          return new d3.InternMap([
-            ['lastAsk', lastAsk],
-            ['negativeAskDifference', nextAsk],
-          ]);
+          returnPriceValues.set('lastAsk', lastAsk);
+          returnPriceValues.set('negativeAskDifference', nextAsk);
+        } else {
+          nextAsk = {
+            ...nextAsk,
+            size: -sizeDifference
+          };
+          returnPriceValues.set('lastAsk', lastAsk);
+          returnPriceValues.set('positiveAskDifference', nextAsk);
         }
-
+      } else if(!nextAsk && !!lastAsk){
+        returnPriceValues.set('lastAsk', lastAsk);
+      } else if(!!nextAsk && !lastAsk){
         nextAsk = {
-          ...nextAsk,
-          size: -sizeDifference
-        };
-        return new d3.InternMap([
-          ['lastAsk', lastAsk],
-          ['positiveAskDifference', nextAsk],
-        ]);
+            ...nextAsk,
+            size: nextAsk.size * this.percentage
+          };
+        returnPriceValues.set('nextAsk', nextAsk);
       }
-      return rollup
+
+      return returnPriceValues;
     }
 
-    const priceRollup = (values: Iterable<PriceValue>) => d3.rollup(values, d => d[0], d => getCategory(d))
-    const typeRollup = (values: Iterable<PriceValue>) => d3.rollup(values, d => calculateSizes(priceRollup(d)), d => d.price);
+    const categoryRollup = (values: Iterable<PriceValue>) => d3.rollup(values, d => d[0], d => getCategory(d))
+    const priceRollup = (values: Iterable<PriceValue>) => d3.rollup(values, d => calculateSizes(categoryRollup(d)), d => d.price);
 
-    const stack = d3.stack<D3ChartComponent, any, string>()
+    const stack = d3.stack<D3ChartComponent, any, ChartDataBar>()
       .keys(keys)
       .value(([,obj], key) => {
         const val = obj.get(key);
         if(!!val && val.type === 'ask') return val.size;
         if(!!val && val.type === 'bid') return -val.size;
         return 0;
-      })(typeRollup(this.values))
+      })(priceRollup(this.values))
 
-    const color = (key: string)=>{
+    const color = (key: ChartDataBar)=>{
       if(key === 'lastAsk') return 'blue';
-      if(key === 'lastBid') return 'orange';
+      if(key === 'lastBid') return 'purple';
       if(key === 'nextBid') return 'pink';
-      if(key === 'nextAsk') return 'purple';
+      if(key === 'nextAsk') return 'lightblue';
       if(key === 'negativeAskDifference' || key === 'negativeBidDifference') return 'red';
       if(key === 'positiveAskDifference' || key === 'positiveBidDifference') return 'green';
       const error = new Error('Invalid key in bar chart stack in chart componentc');
@@ -199,5 +219,6 @@ export class D3ChartComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(){
     this.data$.unsubscribe();
+    this.percentage$.unsubscribe();
   }
 }

@@ -28,7 +28,6 @@ export class SliderComponent implements OnChanges, OnInit {
   dragElem!: d3.Selection<SVGCircleElement, undefined, HTMLElement, undefined>;
   drag = d3.drag<SVGGElement, any>()
     .on('drag', e => this.updateChart(e.x));
-  position = 1;
 
   constructor(private tradingDataService: TradingDataService){}
 
@@ -38,7 +37,8 @@ export class SliderComponent implements OnChanges, OnInit {
 
   ngOnChanges(changes: SimpleChanges) {
     if(changes['data']) {
-      this.times = this.data.map(dataPoint => dataPoint.Time);
+      this.data.sort((a,b)=> a.time.getTime() - b.time.getTime());
+      this.times = this.data.map(dataPoint => dataPoint.time);
       const [minTime, maxTime] = d3.extent(this.times) as [Date, Date];
       this.timeScale = d3.scaleTime()
         .domain([minTime, maxTime])
@@ -64,7 +64,7 @@ export class SliderComponent implements OnChanges, OnInit {
         .join('circle')
         .attr('r', 3)
         .attr('cy', 1)
-        .attr('cx', timePoint => this.timeScale(timePoint.Time))
+        .attr('cx', timePoint => this.timeScale(timePoint.time))
         .attr('fill', '#00000090');
       this.dragElem = timeSlider.append('circle')
         .attr('r', "6px")
@@ -103,33 +103,34 @@ export class SliderComponent implements OnChanges, OnInit {
       this.updateChart(Number.parseInt(this.dragElem.attr('cx')));
     }
   }
+
+  toggleContinousPrediction(e: MatSlideToggleChange){
+    this.isContinousPrediction = e.checked;
+    if(!this.isContinousPrediction){
+      this.tradingDataService.percentageForPrediction(1);
+    }
+  }
   
   updateChart(x:number) {
     const getDragElemPosition = () => {
-      console.log(x)
       if(x < this.marginLeft) return this.marginLeft;
       if(x > this.width - this.marginRight) return this.width - this.marginRight;
       return x
     }
     this.dragElem.attr( "cx", getDragElemPosition());
     const xToDate = this.timeScale.invert(x);
-    const closestDataPointIndex = d3.bisectCenter(this.times, xToDate);
-    const closestDataPoint = this.data[closestDataPointIndex];
+    const nextDataPointIndex = d3.bisect(this.times, xToDate);
+    const lastDataPoint = this.data[nextDataPointIndex - 1];
     if(this.isSnapingToDataPoint){
-      this.dragElem.attr( "cx", this.timeScale(closestDataPoint.Time));
-      this.tradingDataService.setDataPoints(closestDataPoint, undefined);
+      this.dragElem.attr( "cx", this.timeScale(lastDataPoint.time));
+      this.tradingDataService.setDataPoints(lastDataPoint, undefined);
     } else {
+      const deltaPointsTime = this.data[nextDataPointIndex].time.getTime() - lastDataPoint.time.getTime();
+      const deltaCurrTime = xToDate.getTime() - lastDataPoint.time.getTime();
+      
       this.dragElem.attr( "cx", getDragElemPosition());
-      const difference = closestDataPoint.Time.getTime() - xToDate.getTime();
-      let nextDataPoint = undefined;
-
-      if(difference < 0) {
-        nextDataPoint = this.data[closestDataPointIndex - 1];
-      } 
-      if(difference > 0) {
-        nextDataPoint = this.data[closestDataPointIndex + 1];
-      }
-      this.tradingDataService.setDataPoints(closestDataPoint, nextDataPoint);
+      this.isContinousPrediction && this.tradingDataService.percentageForPrediction(deltaCurrTime/deltaPointsTime);
+      this.tradingDataService.setDataPoints(lastDataPoint, this.data[nextDataPointIndex]);
     }
   }
 }

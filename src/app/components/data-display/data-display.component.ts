@@ -30,12 +30,12 @@ export class DataDisplayComponent implements OnInit {
 
     this.chartData = this.data
       .map(elem => this.formatDataPoint(elem))
-      .sort((a,b) => a.Time.getTime() - b.Time.getTime());
+      .sort((a,b) => a.time.getTime() - b.time.getTime());
   }
 
   formatDataPoint(dataInTimePoint: any): DataInTimePoint{
     const formated = {
-      Time: new Date(this.date),
+      time: new Date(this.date),
       values: []
     } as DataInTimePoint;
     const keys = Object.keys(dataInTimePoint);
@@ -81,9 +81,9 @@ export class DataDisplayComponent implements OnInit {
       }
       else {
         let time = dataInTimePoint.Time.split(":");
-        formated.Time.setHours(Number.parseInt(time[0]));
-        formated.Time.setMinutes(Number.parseInt(time[1]));
-        formated.Time.setSeconds(Number.parseFloat(time[2]));
+        formated.time.setHours(Number.parseInt(time[0]));
+        formated.time.setMinutes(Number.parseInt(time[1]));
+        formated.time.setSeconds(Number.parseFloat(time[2]));
       }
     });
     return formated;

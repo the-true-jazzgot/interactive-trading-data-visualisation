@@ -6,7 +6,7 @@ export interface PriceValue {
 }
 
 export interface DataInTimePoint {
-    Time: Date,
+    time: Date,
     values: PriceValue[]
 }
 

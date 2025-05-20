@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ReplaySubject } from 'rxjs';
+import { BehaviorSubject, ReplaySubject } from 'rxjs';
 import { DataInTimePoint } from './trading.interfaces';
 
 @Injectable({
@@ -7,9 +7,15 @@ import { DataInTimePoint } from './trading.interfaces';
 })
 export class TradingDataService {
   private dataInTimePoint = new ReplaySubject<[DataInTimePoint, DataInTimePoint | undefined]>(1);
+  private percentage = new BehaviorSubject<number>(1);
   dataInTimePoint$ = this.dataInTimePoint.asObservable();
+  percentage$ = this.percentage.asObservable();
 
   setDataPoints(closestDataPoint:DataInTimePoint, nextDataPoint: DataInTimePoint | undefined){
     this.dataInTimePoint.next([closestDataPoint, nextDataPoint]);
+  }
+
+  percentageForPrediction(percentage: number) {
+    this.percentage.next(percentage);
   }
 }
