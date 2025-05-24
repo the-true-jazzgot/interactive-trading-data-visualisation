@@ -1,6 +1,6 @@
 import { Component, Input, OnDestroy, OnInit } from '@angular/core';
 import * as d3 from 'd3';
-import { DataInTimePoint, DrawBarArgs, PriceValue } from '../trading.interfaces'
+import { AxisDomainValues, DataInTimePoint, DrawBarArgs, PriceValue } from '../trading.interfaces'
 import { TradingDataService } from '../trading-data-service.service';
 import { Subscription } from 'rxjs';
 
@@ -18,12 +18,17 @@ export class D3ChartComponent implements OnInit, OnDestroy {
   @Input() marginTop: number = 40;
   @Input() marginBottom: number = 40;
 
-  data$!: Subscription;
+  axisDomainValues$!: Subscription;
+  currentAxisDomainValues!: AxisDomainValues;
+  nextAxisDomainValues!: AxisDomainValues;
   percentage$!: Subscription;
-  error?: Error;
-  values!: PriceValue[];
   percentage = 1;
+  dataPoints$!: Subscription;
+  values!: PriceValue[];
+  error?: Error;
   chart!: d3.Selection<SVGSVGElement, undefined, HTMLElement, undefined>;
+  isAnimating$!: Subscription;
+  isAnimating = false;
 
   constructor(private tradingDataService:TradingDataService){}
 
@@ -32,10 +37,19 @@ export class D3ChartComponent implements OnInit, OnDestroy {
       .attr("preserveAspectRatio", "xMinYMin meet")
       .attr("viewBox", `0 0 ${this.width} ${this.height}`);
 
-    this.data$ = this.tradingDataService.dataInTimePoint$.subscribe({
+    this.axisDomainValues$ = this.tradingDataService.axisDomainValues$.subscribe({
       next: data => {
-        this.values = this.extractValuesFromDataPoints(data);
-        this.updateChart();
+        this.nextAxisDomainValues = data;
+        this.calculateAxisDomainValues();
+      },
+      error: e => this.error = e
+    });
+
+    this.dataPoints$ = this.tradingDataService.dataInTimePoint$.subscribe({
+      next: data => {
+        this.values = this.extractValuesFromDataPoints(data)
+        // !this.isAnimating && this.updateChart();
+        this.drawChart();
       },
       error: e => this.error = e,
     });
@@ -43,43 +57,95 @@ export class D3ChartComponent implements OnInit, OnDestroy {
     this.percentage$ = this.tradingDataService.percentage$.subscribe({
       next: data => {
         this.percentage = data
-        this.updateChart();
       },
       error: e => this.error = e,
     });
+
+    this.isAnimating$ = this.tradingDataService.isAnimating$.subscribe({
+      next: data => {
+        this.isAnimating = data;
+        // data && this.updateChart();
+      },
+      error: e => this.error = e
+    });
   }
+
+  // updateChart() {
+  //   if(this.isAnimating) {
+  //     let lastTime = 0;
+  //     const interval = 33;
+
+  //     const animate = (currentTime: number) => {
+  //       const deltaTime = currentTime - lastTime;
+  //       if(deltaTime > interval){
+  //         if(!!this.nextAxisDomainValues && !!this.values)
+  //           this.drawChart();
+  //         if(this.isAnimating)
+  //           console.log(deltaTime);
+  //           requestAnimationFrame(animate);
+  //         lastTime = currentTime;
+  //       }
+  //     }
+  //     requestAnimationFrame(animate);
+  //   } else {
+  //     const draw = () => {
+  //       if(!!this.values) {
+  //         this.calculateAxisDomainValues();
+  //         this.drawChart();
+  //       } else {
+  //         requestAnimationFrame(draw);
+  //       } 
+  //     };
+  //     draw();
+  //   }
+  // }
 
   extractValuesFromDataPoints([dataPoint1, dataPoint2]:[DataInTimePoint, DataInTimePoint | undefined]): PriceValue[]{
     const lastPointData = dataPoint1.values.map(item => Object.assign(item, {compareAs: 'last'}));
     if(!!dataPoint2) {
       return lastPointData.concat(dataPoint2.values.map(item => Object.assign(item, {compareAs: 'next'})));
     }
-    return lastPointData
+    return lastPointData;
   }
 
-  updateChart(): void {
+  calculateAxisDomainValues(){
+    const maxSize = d3.max(this.values.map(item => item.size)) as number;
+    const [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
+
+    this.currentAxisDomainValues = {maxSize: maxSize, minPrice: minPrice, maxPrice: maxPrice};
+
+    if(!!this.nextAxisDomainValues) {
+      const deltaMaxSize = this.nextAxisDomainValues.maxSize - this.currentAxisDomainValues.maxSize;
+      const deltaMinPrice = this.nextAxisDomainValues.minPrice - this.currentAxisDomainValues.minPrice;
+      const deltaMaxPrice = this.nextAxisDomainValues.maxPrice - this.currentAxisDomainValues.maxPrice;
+      
+      if(deltaMaxSize > 0) this.currentAxisDomainValues.maxSize += deltaMaxSize * this.percentage;
+      if(deltaMinPrice < 0) this.currentAxisDomainValues.minPrice += deltaMinPrice * this.percentage;
+      if(deltaMaxPrice > 0) this.currentAxisDomainValues.maxPrice += deltaMaxPrice * this.percentage;
+    }
+  }
+
+  drawChart(): void {
     d3.selectAll('#d3chartSVG > *').remove();
     
-    const maxSize = d3.max(this.values.map(item => item.size)) as number;
     const sizeScale = d3.scaleLinear()
-      .domain([-maxSize - maxSize * .1, maxSize + maxSize * .1])
+      .domain([-this.currentAxisDomainValues.maxSize - this.currentAxisDomainValues.maxSize * .1, this.currentAxisDomainValues.maxSize + this.currentAxisDomainValues.maxSize * .1])
       .range([this.marginLeft, this.width - this.marginRight]);
     this.chart.append('g')
       .attr("transform", `translate(0,${this.height - this.marginBottom})`)
       .call(d3.axisBottom(sizeScale));
     
-    const [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
-    const deltaPrice = maxPrice - minPrice;
+    const deltaPrice = this.currentAxisDomainValues.maxPrice - this.currentAxisDomainValues.minPrice;
     const prizeScale = d3.scaleLinear()
-      .domain([maxPrice + deltaPrice * .05, minPrice - deltaPrice * .05])
+      .domain([this.currentAxisDomainValues.maxPrice + deltaPrice * .05, this.currentAxisDomainValues.minPrice - deltaPrice * .05])
       .range([this.marginTop, this.height - this.marginBottom]);
-    this.chart.append('g')
+      this.chart.append('g')
       .attr("transform", `translate(${this.marginLeft},0)`)
       .call(d3.axisLeft(prizeScale));
 
     const barHeight = prizeScale(0) - prizeScale(.0003);
 
-    const keys = ['lastBid', 'nextBid', 'negativeBidDifference', 'positiveBidDifference', 'lastAsk', 'nextAsk', 'negativeAskDifference', 'positiveAskDifference'] as const;
+    const keys = ['lastBid', 'nextBid', 'negativeBidDifference', 'positiveBidDifference', 'nextBidGhost','lastAsk', 'nextAsk', 'negativeAskDifference', 'positiveAskDifference', 'nextAskGhost'] as const;
     type ChartDataBar = (typeof keys)[number];
     const getCategory = (d:PriceValue): ChartDataBar => {
       if(d.type === 'ask' && d.compareAs === 'last')
@@ -100,6 +166,7 @@ export class D3ChartComponent implements OnInit, OnDestroy {
       let nextBid: PriceValue | undefined = rollup.get('nextBid');
       let lastAsk: PriceValue | undefined = rollup.get('lastAsk');
       let nextAsk: PriceValue | undefined = rollup.get('nextAsk');
+      const isContinousPrediction = this.percentage !== 1;
       const returnPriceValues =  new d3.InternMap<ChartDataBar, PriceValue>();
       
       if(!!nextBid && !!lastBid){
@@ -116,21 +183,25 @@ export class D3ChartComponent implements OnInit, OnDestroy {
           returnPriceValues.set('lastBid', lastBid);
           returnPriceValues.set('negativeBidDifference', nextBid);
         } else {
+          const nextBidGhost = {...nextBid, size: nextBid.size - lastBid.size + sizeDifference};
           nextBid = {
             ...nextBid,
             size: -sizeDifference
           };
           returnPriceValues.set('lastBid', lastBid);
           returnPriceValues.set('positiveBidDifference', nextBid);
+          isContinousPrediction && returnPriceValues.set('nextBidGhost', nextBidGhost);
         }
       } else if(!nextBid && !!lastBid){
         returnPriceValues.set('lastBid', lastBid);
       } else if(!!nextBid && !lastBid){
-          nextBid = {
-            ...nextBid,
-            size: nextBid.size * this.percentage
-          };
+        const nextBidGhost = {...nextBid, size: nextBid.size - nextBid.size * this.percentage};
+        nextBid = {
+          ...nextBid,
+          size: nextBid.size * this.percentage
+        };
         returnPriceValues.set('nextBid', nextBid);
+        isContinousPrediction && returnPriceValues.set('nextBidGhost', nextBidGhost);
       }
 
       if(!!nextAsk && !!lastAsk){
@@ -148,21 +219,25 @@ export class D3ChartComponent implements OnInit, OnDestroy {
           returnPriceValues.set('lastAsk', lastAsk);
           returnPriceValues.set('negativeAskDifference', nextAsk);
         } else {
+          const nextAskGhost = {...nextAsk, size: nextAsk.size - lastAsk.size + sizeDifference};
           nextAsk = {
             ...nextAsk,
             size: -sizeDifference
           };
           returnPriceValues.set('lastAsk', lastAsk);
           returnPriceValues.set('positiveAskDifference', nextAsk);
+          isContinousPrediction && returnPriceValues.set('nextAskGhost', nextAskGhost);
         }
       } else if(!nextAsk && !!lastAsk){
         returnPriceValues.set('lastAsk', lastAsk);
       } else if(!!nextAsk && !lastAsk){
+        const nextAskGhost = {...nextAsk, size: nextAsk.size - nextAsk.size * this.percentage};
         nextAsk = {
             ...nextAsk,
             size: nextAsk.size * this.percentage
           };
         returnPriceValues.set('nextAsk', nextAsk);
+        isContinousPrediction && returnPriceValues.set('nextAskGhost', nextAskGhost);
       }
 
       return returnPriceValues;
@@ -173,12 +248,14 @@ export class D3ChartComponent implements OnInit, OnDestroy {
 
     const stack = d3.stack<D3ChartComponent, any, ChartDataBar>()
       .keys(keys)
+      .order(d3.stackOrderNone)
+      .offset(d3.stackOffsetDiverging)
       .value(([,obj], key) => {
-        const val = obj.get(key);
+        let val = obj.get(key);
         if(!!val && val.type === 'ask') return val.size;
         if(!!val && val.type === 'bid') return -val.size;
         return 0;
-      })(priceRollup(this.values))
+      })(priceRollup(this.values));
 
     const color = (key: ChartDataBar)=>{
       if(key === 'lastAsk') return 'blue';
@@ -187,7 +264,8 @@ export class D3ChartComponent implements OnInit, OnDestroy {
       if(key === 'nextAsk') return 'lightblue';
       if(key === 'negativeAskDifference' || key === 'negativeBidDifference') return 'red';
       if(key === 'positiveAskDifference' || key === 'positiveBidDifference') return 'green';
-      const error = new Error('Invalid key in bar chart stack in chart componentc');
+      if(key === 'nextAskGhost' || key === 'nextBidGhost') return 'lightgrey';
+      const error = new Error('Invalid key in bar chart stack in chart component');
       this.error = error;
       throw error;
     }
@@ -208,17 +286,16 @@ export class D3ChartComponent implements OnInit, OnDestroy {
           const val = d.data[1].get(d.key)
           return !!val ? prizeScale(d.data[1].get(d.key).price) - barHeight/2: 0;
         })
-        .attr("width", d => {
-          const val = sizeScale(d[1]) - sizeScale(d[0])
-          return val > 0 ? val: sizeScale(d[0]) - sizeScale(d[1])
-        })
+        .attr("width", d => sizeScale(d[1]) - sizeScale(d[0]))
         .attr("height", barHeight)
     // .append("title")
     //   .text(({key, data: [name, value]}) => `${name} ${formatValue(value.get(key))} ${key}`);
   }
 
   ngOnDestroy(){
-    this.data$.unsubscribe();
+    this.dataPoints$.unsubscribe();
     this.percentage$.unsubscribe();
+    this.axisDomainValues$.unsubscribe();
+    this.isAnimating$.unsubscribe();
   }
 }

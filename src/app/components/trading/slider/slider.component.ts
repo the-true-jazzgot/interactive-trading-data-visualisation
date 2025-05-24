@@ -1,5 +1,5 @@
 import { Component, Input, OnChanges, OnInit, SimpleChanges, ViewEncapsulation } from '@angular/core';
-import { DataInTimePoint } from '../trading.interfaces';
+import { DataInTimePoint, PriceValue } from '../trading.interfaces';
 import * as d3 from 'd3';
 import { TradingDataService } from '../trading-data-service.service';
 import { MatSlideToggleChange, MatSlideToggleModule } from '@angular/material/slide-toggle';
@@ -26,6 +26,7 @@ export class SliderComponent implements OnChanges, OnInit {
   times!: Date[];
   timeScale!: d3.ScaleTime<number, number, never>;
   dragElem!: d3.Selection<SVGCircleElement, undefined, HTMLElement, undefined>;
+  timeIndicator!: d3.Selection<SVGRectElement, undefined, HTMLElement, undefined>;
   drag = d3.drag<SVGGElement, any>()
     .on('drag', e => this.updateChart(e.x));
 
@@ -67,26 +68,34 @@ export class SliderComponent implements OnChanges, OnInit {
         .attr('cx', timePoint => this.timeScale(timePoint.time))
         .attr('fill', '#00000090');
       this.dragElem = timeSlider.append('circle')
-        .attr('r', "6px")
+        .attr('r', "6")
         .attr('cy', 1)
         .attr('cx', this.timeScale(this.times[0]))
         .attr('stroke', 'green')
-        .attr('stroke-width', '4px')
+        .attr('stroke-width', '4')
         .attr('fill', '#00000000')
         .classed('selector', true);
+      this.timeIndicator = timeSlider.append('rect')
+        .attr('x', this.timeScale(this.times[0]))
+        .attr('y', 1)
+        .attr('width', "2")
+        .attr('height', '12')
+        .attr('fill', '#00000000');
     }
   }
 
   toggleAnimation(e: MatSlideToggleChange) {
     this.isAnimating = e.checked;
+    this.tradingDataService.setIsAnimating(e.checked);
     const interval = 33; //around 30 fps
     let lastTime = 0;
 
     const animate = (currentTime:number) => {
       const deltaTime = currentTime - lastTime;
+      // console.log(deltaTime);
       if (deltaTime > interval) {
         const currX = this.timeScale.invert(Number.parseFloat(this.dragElem.attr('cx')));
-        const  newX = this.timeScale(currX.getTime() + (interval * this.speed * 3));
+        const newX = this.timeScale(currX.getTime() + (interval * 3 * this.speed));
         this.updateChart(newX);
         lastTime = currentTime;
       }
@@ -107,7 +116,7 @@ export class SliderComponent implements OnChanges, OnInit {
   toggleContinousPrediction(e: MatSlideToggleChange){
     this.isContinousPrediction = e.checked;
     if(!this.isContinousPrediction){
-      this.tradingDataService.percentageForPrediction(1);
+      this.tradingDataService.setPercentageForPrediction(1);
     }
   }
   
@@ -117,20 +126,29 @@ export class SliderComponent implements OnChanges, OnInit {
       if(x > this.width - this.marginRight) return this.width - this.marginRight;
       return x
     }
-    this.dragElem.attr( "cx", getDragElemPosition());
+
+    this.dragElem.attr( 'cx', getDragElemPosition());
     const xToDate = this.timeScale.invert(x);
     const nextDataPointIndex = d3.bisect(this.times, xToDate);
     const lastDataPoint = this.data[nextDataPointIndex - 1];
     if(this.isSnapingToDataPoint){
-      this.dragElem.attr( "cx", this.timeScale(lastDataPoint.time));
-      this.tradingDataService.setDataPoints(lastDataPoint, undefined);
+      this.dragElem.attr( 'cx', this.timeScale(lastDataPoint.time));
+      // this.isAnimating ? this.timeIndicator.attr('x', x).attr('fill', '#000') : this.timeIndicator.attr('fill', '#00000000');
+      this.tradingDataService.setDataPoints(lastDataPoint);
     } else {
       const deltaPointsTime = this.data[nextDataPointIndex].time.getTime() - lastDataPoint.time.getTime();
       const deltaCurrTime = xToDate.getTime() - lastDataPoint.time.getTime();
       
       this.dragElem.attr( "cx", getDragElemPosition());
-      this.isContinousPrediction && this.tradingDataService.percentageForPrediction(deltaCurrTime/deltaPointsTime);
+      this.isContinousPrediction && this.tradingDataService.setPercentageForPrediction(deltaCurrTime/deltaPointsTime);
       this.tradingDataService.setDataPoints(lastDataPoint, this.data[nextDataPointIndex]);
+      
+      const values: PriceValue[] = [];
+      [lastDataPoint, this.data[nextDataPointIndex], this.data[nextDataPointIndex + 1]]
+        .forEach(item => values.push(...item.values));
+      const maxSize = d3.max(values.map(item => item.size)) as number;
+      const [minPrice, maxPrice] = d3.extent(values.map(value => value.price)) as [number, number];
+      this.tradingDataService.setAxisDomainValues({maxSize: maxSize, minPrice: minPrice, maxPrice: maxPrice});
     }
   }
 }

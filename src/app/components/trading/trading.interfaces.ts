@@ -10,6 +10,12 @@ export interface DataInTimePoint {
     values: PriceValue[]
 }
 
+export interface AxisDomainValues {
+    maxSize: number,
+    minPrice: number,
+    maxPrice: number
+}
+
 export interface DrawBarArgs {
     x:number, 
     y:number, 
