@@ -48,8 +48,7 @@ export class D3ChartComponent implements OnInit, OnDestroy {
     this.dataPoints$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
         this.values = this.extractValuesFromDataPoints(data)
-        // !this.isAnimating && this.updateChart();
-        this.drawChart();
+        this.updateChart();
       },
       error: e => this.error = e,
     });
@@ -64,41 +63,27 @@ export class D3ChartComponent implements OnInit, OnDestroy {
     this.isAnimating$ = this.tradingDataService.isAnimating$.subscribe({
       next: data => {
         this.isAnimating = data;
-        // data && this.updateChart();
       },
       error: e => this.error = e
     });
   }
 
-  // updateChart() {
-  //   if(this.isAnimating) {
-  //     let lastTime = 0;
-  //     const interval = 33;
-
-  //     const animate = (currentTime: number) => {
-  //       const deltaTime = currentTime - lastTime;
-  //       if(deltaTime > interval){
-  //         if(!!this.nextAxisDomainValues && !!this.values)
-  //           this.drawChart();
-  //         if(this.isAnimating)
-  //           console.log(deltaTime);
-  //           requestAnimationFrame(animate);
-  //         lastTime = currentTime;
-  //       }
-  //     }
-  //     requestAnimationFrame(animate);
-  //   } else {
-  //     const draw = () => {
-  //       if(!!this.values) {
-  //         this.calculateAxisDomainValues();
-  //         this.drawChart();
-  //       } else {
-  //         requestAnimationFrame(draw);
-  //       } 
-  //     };
-  //     draw();
-  //   }
-  // }
+  updateChart() {
+    if(this.isAnimating) {
+      if(!!this.nextAxisDomainValues && !!this.values)
+        this.drawChart();
+    } else {
+      const draw = () => {
+        if(!!this.values) {
+          this.calculateAxisDomainValues();
+          this.drawChart();
+        } else {
+          requestAnimationFrame(draw);
+        } 
+      };
+      draw();
+    }
+  }
 
   extractValuesFromDataPoints([dataPoint1, dataPoint2]:[DataInTimePoint, DataInTimePoint | undefined]): PriceValue[]{
     const lastPointData = dataPoint1.values.map(item => Object.assign(item, {compareAs: 'last'}));
