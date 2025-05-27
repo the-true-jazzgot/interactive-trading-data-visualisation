@@ -75,12 +75,12 @@ export class SliderComponent implements OnChanges, OnInit {
         .attr('stroke-width', '4')
         .attr('fill', '#00000000')
         .classed('selector', true);
-      this.timeIndicator = timeSlider.append('rect')
-        .attr('x', this.timeScale(this.times[0]))
-        .attr('y', 1)
-        .attr('width', "2")
-        .attr('height', '12')
-        .attr('fill', '#00000000');
+      // this.timeIndicator = timeSlider.append('rect')
+      //   .attr('x', this.timeScale(this.times[0]))
+      //   .attr('y', 1)
+      //   .attr('width', "2")
+      //   .attr('height', '12')
+      //   .attr('fill', '#00000000');
     }
   }
 
@@ -92,7 +92,6 @@ export class SliderComponent implements OnChanges, OnInit {
 
     const animate = (currentTime:number) => {
       const deltaTime = currentTime - lastTime;
-      // console.log(deltaTime);
       if (deltaTime > interval) {
         const currX = this.timeScale.invert(Number.parseFloat(this.dragElem.attr('cx')));
         const newX = this.timeScale(currX.getTime() + (interval * 3 * this.speed));
@@ -127,21 +126,23 @@ export class SliderComponent implements OnChanges, OnInit {
       return x
     }
 
-    this.dragElem.attr( 'cx', getDragElemPosition());
+    this.dragElem.attr('cx', getDragElemPosition());
     const xToDate = this.timeScale.invert(x);
     const nextDataPointIndex = d3.bisect(this.times, xToDate);
     const lastDataPoint = this.data[nextDataPointIndex - 1];
+    
     if(this.isSnapingToDataPoint){
-      this.dragElem.attr( 'cx', this.timeScale(lastDataPoint.time));
-      // this.isAnimating ? this.timeIndicator.attr('x', x).attr('fill', '#000') : this.timeIndicator.attr('fill', '#00000000');
+      this.dragElem.attr('cx', this.isAnimating ? getDragElemPosition() : this.timeScale(lastDataPoint.time));
+      const maxSize = d3.max(lastDataPoint.values.map(item => item.size)) as number;
+      const [minPrice, maxPrice] = d3.extent(lastDataPoint.values.map(value => value.price)) as [number, number];
+      this.tradingDataService.setAxisDomainValues({maxSize: maxSize, minPrice: minPrice, maxPrice: maxPrice});
       this.tradingDataService.setDataPoints(lastDataPoint);
     } else {
       const deltaPointsTime = this.data[nextDataPointIndex].time.getTime() - lastDataPoint.time.getTime();
       const deltaCurrTime = xToDate.getTime() - lastDataPoint.time.getTime();
-      
       this.dragElem.attr( "cx", getDragElemPosition());
       this.isContinousPrediction && this.tradingDataService.setPercentageForPrediction(deltaCurrTime/deltaPointsTime);
-      this.tradingDataService.setDataPoints(lastDataPoint, this.data[nextDataPointIndex]);
+      this.tradingDataService.setDataPoints(lastDataPoint, this.data[nextDataPointIndex]);  
       
       const values: PriceValue[] = [];
       [lastDataPoint, this.data[nextDataPointIndex], this.data[nextDataPointIndex + 1]]

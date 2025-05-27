@@ -47,7 +47,7 @@ export class D3ChartComponent implements OnInit, OnDestroy {
 
     this.dataPoints$ = this.tradingDataService.dataInTimePoint$.subscribe({
       next: data => {
-        this.values = this.extractValuesFromDataPoints(data)
+        this.values = this.extractValuesFromDataPoints(data);
         this.updateChart();
       },
       error: e => this.error = e,
@@ -70,8 +70,10 @@ export class D3ChartComponent implements OnInit, OnDestroy {
 
   updateChart() {
     if(this.isAnimating) {
-      if(!!this.nextAxisDomainValues && !!this.values)
+      if(!!this.values){
+        this.calculateAxisDomainValues();
         this.drawChart();
+      }
     } else {
       const draw = () => {
         if(!!this.values) {
@@ -93,20 +95,42 @@ export class D3ChartComponent implements OnInit, OnDestroy {
     return lastPointData;
   }
 
-  calculateAxisDomainValues(){
+  calculateAxisDomainValues(): void {
     const maxSize = d3.max(this.values.map(item => item.size)) as number;
     const [minPrice, maxPrice] = d3.extent(this.values.map(value => value.price)) as [number, number];
-
-    this.currentAxisDomainValues = {maxSize: maxSize, minPrice: minPrice, maxPrice: maxPrice};
-
+    
+    if(!this.currentAxisDomainValues || !this.isAnimating)
+      this.currentAxisDomainValues = {maxSize: maxSize, minPrice: minPrice, maxPrice: maxPrice};
+    
     if(!!this.nextAxisDomainValues) {
       const deltaMaxSize = this.nextAxisDomainValues.maxSize - this.currentAxisDomainValues.maxSize;
       const deltaMinPrice = this.nextAxisDomainValues.minPrice - this.currentAxisDomainValues.minPrice;
       const deltaMaxPrice = this.nextAxisDomainValues.maxPrice - this.currentAxisDomainValues.maxPrice;
       
       if(deltaMaxSize > 0) this.currentAxisDomainValues.maxSize += deltaMaxSize * this.percentage;
+      if(deltaMaxSize < 0 && maxSize < this.currentAxisDomainValues.maxSize){
+        if(this.nextAxisDomainValues.maxSize < maxSize) {
+          this.currentAxisDomainValues.maxSize += (maxSize - this.currentAxisDomainValues.maxSize) * this.percentage;
+        } else {
+          this.currentAxisDomainValues.maxSize += (this.nextAxisDomainValues.maxSize - this.currentAxisDomainValues.maxSize) * this.percentage;
+        }
+      }
       if(deltaMinPrice < 0) this.currentAxisDomainValues.minPrice += deltaMinPrice * this.percentage;
+      if(deltaMinPrice > 0 && minPrice > this.currentAxisDomainValues.minPrice) {
+        if(minPrice > this.nextAxisDomainValues.minPrice) {
+          this.currentAxisDomainValues.minPrice += (minPrice - this.currentAxisDomainValues.minPrice) * this.percentage;
+        } else {
+          this.currentAxisDomainValues.minPrice += (this.nextAxisDomainValues.minPrice - this.currentAxisDomainValues.minPrice) * this.percentage;
+        }
+      }
       if(deltaMaxPrice > 0) this.currentAxisDomainValues.maxPrice += deltaMaxPrice * this.percentage;
+      if(deltaMaxPrice < 0 && maxPrice < this.currentAxisDomainValues.maxPrice) {
+        if(maxPrice > this.nextAxisDomainValues.maxPrice) {
+          this.currentAxisDomainValues.maxPrice += (maxPrice - this.currentAxisDomainValues.maxPrice) * this.percentage;
+        } else {
+          this.currentAxisDomainValues.maxPrice += (this.nextAxisDomainValues.maxPrice - this.currentAxisDomainValues.maxPrice) * this.percentage;
+        }
+      }
     }
   }
 
